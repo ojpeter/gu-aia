@@ -11,9 +11,11 @@
  *   - the unanswered-question report and the feedback stream
  *   - the last evaluation run
  *
- * The write actions — authoring curated entries, marking a document
- * authoritative, triggering a re-index — are not built yet, and the page says so
- * rather than showing disabled buttons that imply they nearly work.
+ * The write actions live on their own screens, linked from the bar and only for
+ * the roles that may use them: curated.php (editor and above) and
+ * authoritative.php (authoriser, second factor required). Re-indexing is the one
+ * thing still unbuilt, and the page lists it as such rather than showing a
+ * disabled button that implies it nearly works.
  *
  * THE UNANSWERED-QUESTION REPORT IS FIRST ON THE PAGE, DELIBERATELY. Section 13:
  * "Treat this report as a primary deliverable... it is likely to be worth more
@@ -97,6 +99,12 @@ header('Referrer-Policy: no-referrer');
 <body>
 <header class="bar">
   <strong>GU-AIA console</strong>
+<?php if ($user->may(Role::EDIT_CURATED)): ?>
+  <a href="curated.php">Curated answers</a>
+<?php endif; ?>
+<?php if ($user->may(Role::MARK_AUTHORITATIVE)): ?>
+  <a href="authoritative.php">Authoritative sources</a>
+<?php endif; ?>
   <span><?= $console->esc($user->name) ?> &middot; <?= $console->esc($user->role->value) ?></span>
   <form method="post" action="logout.php"><?= $console->csrf->field() ?><button type="submit">Sign out</button></form>
 </header>
@@ -192,9 +200,7 @@ header('Referrer-Policy: no-referrer');
     <h2>Not built yet</h2>
     <p class="lede">Listed rather than shown as disabled buttons, which would imply they nearly work.</p>
     <ul>
-      <li>Authoring and editing curated question-and-answer entries</li>
-      <li>Marking a document authoritative for a category<?= $user->may(Role::MARK_AUTHORITATIVE) ? '' : ' &mdash; and your role could not do this anyway' ?></li>
-      <li>Triggering a re-index of a document or the whole corpus</li>
+      <li>Triggering a re-index of a document or the whole corpus &mdash; this needs the crawler and PDF extractor, which do not exist yet, so it is really their prerequisite rather than a console gap</li>
     </ul>
   </section>
 
