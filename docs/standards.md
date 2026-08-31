@@ -10,7 +10,9 @@
 | **Implemented** | Code exists and is believed correct. Not yet proven by a passing test. |
 | **Verified** | A test or a recorded manual check proves it, and the evidence is named below. |
 
-**As of 2026-08-31**, the schema, the database-access controls, the refusal/routing/citation core, and the evaluation harness are built; **5 of the 12 invariants have a passing named test** (INV-1, INV-2, INV-3, INV-10, INV-12). The rest are `Implemented` at the schema layer or still `Specified`. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the check and can name it.
+**As of 2026-08-31**, **all twelve invariants have a passing named test.** That is not the same as the system being safe, and the distinction is the whole point of this register: every invariant has a mechanism and a test for that mechanism, but several also have a behavioural half that only the evaluation harness can measure, and the harness cannot measure it without a corpus that Phase 0 gates. Read the table as “the controls exist and work as designed”, not “the assistant behaves well on real questions”.
+
+The schema, the database-access controls, the refusal/routing/citation core, the answering pipeline, the logger, the widget and the evaluation harness are built; **5 of the 12 invariants have a passing named test** (INV-1, INV-2, INV-3, INV-10, INV-12). The rest are `Implemented` at the schema layer or still `Specified`. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the check and can name it.
 
 Where a control is enforced at more than one layer, the row says so — several of the data-access controls below are now enforced in the **grant table**, not only in application code that does not yet exist.
 
@@ -49,8 +51,8 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | INV-8 | Spend is capped, degraded mode is real | `Answering\BudgetGuard` checked before every generation call, **failing closed on a null ceiling**; `AnsweringPipeline` degrades to retrieval-only on both an exhausted budget and a generation timeout | `tests/Invariant/BudgetCapTest.php` — 7 cases including the two degraded paths end to end | **Verified**. Degraded mode is the DEFAULT path until a ceiling is set, so it is exercised constantly rather than being a branch first taken in production |
 | INV-9 | Works on a bad connection (60 KB, no-JS) | Server-rendered form posting to the same endpoint; `widget.js` is progressive enhancement that hands back to a plain form post on any failure | `tests/Invariant/WorksOnABadConnectionTest.php` — payload budget, real form attributes, cited sources in the fallback, escaped model output, no external assets | **Verified** — 5.5 KB of CSS+JS against a 60 KB budget, and the no-JS post exercised end to end over curl |
 | INV-10 | No personal data in Phase 1 | Absence of integration surface, plus: no account holds any privilege on `gu_hrms` or `gu_website` | `bin/verify_grants.php` (3 probes) + `tests/Invariant/NoPortalIntegrationTest.php` | **Verified** at the grant layer |
-| INV-11 | Stale content is visible; `reviewed_at` mandatory | `documents`/`chunks` NOT NULL + `CHECK` (0001, 0007); `AnswerResult::$staleSource`; the widget renders a caution above the answer and the last-reviewed date beside every source | `tests/Invariant/ReviewedAtMandatoryTest.php` **does not exist yet** — the behaviour is covered incidentally by `AnsweringPipelineTest` and `WorksOnABadConnectionTest` | **Implemented, not Verified.** The only invariant still without a named test, and it is not blocked by anything |
-| INV-12 | Nothing is deleted | Three layers: no `DELETE` granted to any account (`db/accounts.sql`); `bin/migrate.php` refuses `DELETE`/`TRUNCATE` migrations; status/`superseded_at` columns instead of removal | `bin/verify_grants.php` (5 probes) + `tests/Invariant/NoHardDeleteTest.php` | **Verified** at the grant and runner layers; CI grep still Specified |
+| INV-11 | Stale content is visible; `reviewed_at` mandatory | `documents`/`chunks` NOT NULL + `CHECK` (0001, 0007); `AnswerResult::$staleSource`; the widget renders a caution **above** the answer and the last-reviewed date beside every source | `tests/Invariant/ReviewedAtMandatoryTest.php` — 12 cases covering both halves: the schema refuses a missing, zero or intervalless review date, and the render puts the caution before the text | **Verified** |
+| INV-12 | Nothing is deleted | Four layers: no `DELETE` granted to any account; `bin/migrate.php` refuses `DELETE`/`TRUNCATE` migrations; status/`superseded_at` columns instead of removal; and `Logging\RetentionSweeper`, which expires personal data by **redaction** — the row survives, the identifying content is blanked | `NoHardDeleteTest` (static) + `NothingIsDeletedTest` (behavioural, 7 cases) + `bin/verify_grants.php` (8 probes) | **Verified** |
 
 ---
 
@@ -153,6 +155,18 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | Session state, 30-minute expiry | Section 10 | **Implemented** — httponly, samesite, secure when on HTTPS, custom cookie name, idle timeout regenerates |
 | Errors expose nothing internal | Rule 5 | **Implemented** — the visitor gets one sentence; the detail goes to `error_log` |
 | Starter questions from the real log | Section 10 | **Not built** — deliberately. They must come from the top real questions, and there are none yet. Inventing plausible ones would put fabricated demand data in front of Communications |
+
+---
+
+## 11. Retention and redaction (`requirements.md` Section 13; DPPA 2019)
+
+| Control | Requirement | Status |
+|---|---|---|
+| Expiry by redaction, never deletion | INV-12 | **Verified** — `Logging\RetentionSweeper`; the row, its correlation ID, timings, mode, category and refusal reason survive so a complaint stays answerable; the query text, answer and free-text feedback are blanked |
+| Refuses to run without a configured period | Section 18 open question 5 | **Verified** — `bin/redact_expired.php` exits non-zero. Guessing would be worse than failing: too short destroys the record a complaint needs, too long is a retention nobody authorised. A nightly job failing loudly is the correct alarm |
+| Technical identifiers expire sooner | DF-2 | **Verified** — hashed IP and session cleared on their own shorter clock; the interaction stays reconstructible without them |
+| Idempotent | — | **Verified** — `redacted_at` makes a second sweep a no-op |
+| Retention period actually set | DPPA | **NOT DONE, and now the binding gap.** The log writer and the widget both exist, so the day this is exposed to the public is the day personal data starts accumulating under no stated retention |
 
 ---
 

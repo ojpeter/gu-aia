@@ -137,6 +137,14 @@ $probes = [
     ['ingest', 'deny', 'INV-10: ingest CANNOT read gu_hrms',
         'SELECT 1 FROM gu_hrms.employees LIMIT 1'],
 
+    // --- The retention sweep runs as the app account and redacts by UPDATE ---
+    ['app', 'allow', 'INV-12: app may REDACT an interaction (update, not delete)',
+        "UPDATE interactions SET query_text = '[redacted]' WHERE id = 0"],
+    ['app', 'allow', 'INV-12: app may redact an unanswered question',
+        "UPDATE unanswered_questions SET normalised_question = '' WHERE id = 0"],
+    ['app', 'allow', 'INV-12: app may redact a feedback comment',
+        'UPDATE feedback SET comment = NULL WHERE id = 0'],
+
     // --- The app can do the logging it must do (INV-7) ---
     ['app', 'allow', 'INV-7: app reads the interaction log',
         'SELECT id FROM interactions LIMIT 1'],

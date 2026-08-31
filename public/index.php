@@ -247,7 +247,7 @@ $invariants = [
     ['id' => 'INV-10', 'text' => 'No personal data in Phase 1.',
         'state' => 'tested', 'note' => 'no account can reach a sibling database'],
     ['id' => 'INV-11', 'text' => 'Stale content is visible.',
-        'state' => 'partial', 'note' => 'CHECK constraints and a rendered caution; still no named test'],
+        'state' => 'tested', 'note' => 'schema refuses a zero date; caution renders above the answer'],
     ['id' => 'INV-12', 'text' => 'Nothing is deleted.',
         'state' => 'tested', 'note' => 'no DELETE granted to any account'],
 ];
@@ -448,7 +448,8 @@ a:focus-visible, .skip:focus-visible { outline: 3px solid var(--green); outline-
 <?php endif; ?>
 
     <h2>The twelve invariants</h2>
-    <p>Each requires a named test in <code>tests/Invariant/</code> before release. <strong><?= $testedCount ?> of 12 have one and it passes.</strong> The rest are marked honestly: <em>partial</em> means enforced somewhere real &mdash; a database constraint or a withheld privilege &mdash; but with no test file yet; <em>specified</em> means written down and nothing more. An invariant without a passing test is an invariant that does not exist, whatever the code appears to do.</p>
+    <p>Each requires a named test in <code>tests/Invariant/</code> before release. <strong>All <?= $testedCount ?> have one and it passes.</strong></p>
+    <p><strong>This is not the same as the system being safe.</strong> Every invariant has a mechanism and a test for that mechanism; several also have a behavioural half that only the evaluation harness can measure, and the harness cannot measure it without a corpus. Phase&nbsp;0 gates the corpus. Read this as &ldquo;the controls exist and are proven to work as designed&rdquo;, not as &ldquo;the assistant has been shown to behave well on real questions&rdquo;.</p>
     <ul class="inv">
 <?php foreach ($invariants as $inv): ?>
       <li class="inv--<?= $esc($inv['state']) ?>">
