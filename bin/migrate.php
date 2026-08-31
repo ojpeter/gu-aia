@@ -80,14 +80,34 @@ foreach ($pending as $path) {
         exit(1);
     }
 
-    printf("Applying %s ... ", $filename);
+    // MySQL and MariaDB commit implicitly on every DDL statement, so a
+    // migration that creates or alters a table CANNOT be wrapped in a
+    // transaction — the first CREATE ends it, and the later commit() then
+    // throws "There is no active transaction". Data-only migrations (seeds,
+    // backfills) have no such restriction and do get real atomicity.
+    //
+    // The honest consequence, which is why it is stated here and in
+    // db/migrations/README.md rather than glossed over: a DDL migration that
+    // fails halfway leaves partial state behind, and the remedy is a new
+    // forward migration, not a rollback.
+    $isDdl = preg_match('/\b(CREATE|ALTER|DROP|RENAME)\b/i', $sql) === 1;
+
+    printf("Applying %-34s %-6s ... ", $filename, $isDdl ? '[ddl]' : '[data]');
 
     try {
-        $pdo->beginTransaction();
+        if (!$isDdl) {
+            $pdo->beginTransaction();
+        }
+
         $pdo->exec($sql);
+
         $stmt = $pdo->prepare('INSERT INTO schema_migrations (filename, applied_at) VALUES (?, NOW())');
         $stmt->execute([$filename]);
-        $pdo->commit();
+
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
         echo "ok\n";
     } catch (PDOException $e) {
         if ($pdo->inTransaction()) {
@@ -95,6 +115,11 @@ foreach ($pending as $path) {
         }
         echo "FAILED\n";
         fwrite(STDERR, $e->getMessage() . "\n");
+        if ($isDdl) {
+            fwrite(STDERR, "This migration contains DDL, which MySQL/MariaDB cannot roll back.\n");
+            fwrite(STDERR, "Part of {$filename} may have been applied. Inspect the schema before retrying;\n");
+            fwrite(STDERR, "the fix is a new forward migration, never an edit to this one.\n");
+        }
         fwrite(STDERR, "Stopped. No further migrations applied.\n");
         exit(1);
     }
@@ -140,15 +165,16 @@ function connect(array $env): PDO
 
     $dsn = sprintf('mysql:host=%s;dbname=%s;charset=%s', $host, $name, $charset);
 
+    // Shared options, including the strict sql_mode that stops the server
+    // silently substituting '0000-00-00' for a missing NOT NULL date — see
+    // config/pdo_options.php and 0007_enforce_review_dates.sql.
+    $options = require __DIR__ . '/../config/pdo_options.php';
+
     return new PDO(
         $dsn,
         $env['DB_MIGRATION_USER'] ?? '',
         $env['DB_MIGRATION_PASS'] ?? '',
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]
+        $options
     );
 }
 

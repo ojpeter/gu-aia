@@ -10,7 +10,9 @@
 | **Implemented** | Code exists and is believed correct. Not yet proven by a passing test. |
 | **Verified** | A test or a recorded manual check proves it, and the evidence is named below. |
 
-**As of 2026-08-31, every row is `Specified`.** The repository is foundations only — directory skeleton, requirements, rules, migration runner and configuration stubs. Nothing below has been built, and nothing has been tested. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the test and can name it.
+**As of 2026-08-31**, the schema and the database-access controls are built and verified; everything else is still `Specified`. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the check and can name it.
+
+Where a control is enforced at more than one layer, the row says so — several of the data-access controls below are now enforced in the **grant table**, not only in application code that does not yet exist.
 
 ---
 
@@ -46,9 +48,9 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | INV-7 | Everything is logged | *not built* | `tests/Invariant/InteractionLoggedTest.php` | Specified |
 | INV-8 | Spend is capped, degraded mode is real | *not built* | `tests/Invariant/BudgetCapTest.php` | Specified |
 | INV-9 | Works on a bad connection (60 KB, no-JS) | *not built* | `tests/Invariant/PayloadBudgetTest.php`, `NoJsFallbackTest.php` | Specified |
-| INV-10 | No personal data in Phase 1 | *absence of integration surface* | `tests/Invariant/NoPortalIntegrationTest.php` | Specified |
-| INV-11 | Stale content is visible; `reviewed_at` mandatory | *not built* | `tests/Invariant/ReviewedAtMandatoryTest.php` | Specified |
-| INV-12 | Nothing is deleted | *CI grep for `DELETE`* | `tests/Invariant/NoHardDeleteTest.php` | Specified |
+| INV-10 | No personal data in Phase 1 | Absence of integration surface, plus: no account holds any privilege on `gu_hrms` or `gu_website` | `bin/verify_grants.php` (3 probes) + `tests/Invariant/NoPortalIntegrationTest.php` | **Verified** at the grant layer |
+| INV-11 | Stale content is visible; `reviewed_at` mandatory | `documents`/`chunks`: NOT NULL + `CHECK` constraints (0001, 0007) | `tests/Invariant/ReviewedAtMandatoryTest.php` | **Implemented** (schema layer) — bypass via non-strict `sql_mode` found and closed, see 0007; the answer-rendering half is still Specified |
+| INV-12 | Nothing is deleted | Three layers: no `DELETE` granted to any account (`db/accounts.sql`); `bin/migrate.php` refuses `DELETE`/`TRUNCATE` migrations; status/`superseded_at` columns instead of removal | `bin/verify_grants.php` (5 probes) + `tests/Invariant/NoHardDeleteTest.php` | **Verified** at the grant and runner layers; CI grep still Specified |
 
 ---
 
@@ -78,7 +80,7 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | Per-action server-side authorisation | `src/Admin/` | Specified |
 | Security headers, tested in the embedded case inside `gu-website` | `public/` | Specified |
 | Error handling: no stack trace, DB error, path, or prompt to a visitor | global handler | Specified |
-| Append-only admin audit log | `src/Logging/` | Specified |
+| Append-only admin audit log | `admin_audit_log` (0004); append-only enforced by grant — the app holds `SELECT`+`INSERT` and neither `UPDATE` nor `DELETE`, so a compromised console session cannot rewrite history | **Verified** at the grant layer (2 probes); the writing code in `src/Logging/` is still Specified |
 
 ---
 
@@ -86,12 +88,12 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 
 | Control | Requirement | Status |
 |---|---|---|
-| Purpose limitation | Phase 1 has **no** Portal/HR/student integration surface in the codebase (INV-10) | Specified |
-| One account per role | Web-serving, ingestion worker, and migration accounts separate, each least-privilege | Specified |
-| Grants verified functionally | Attempt the write that should fail; record the result. Not asserted from the `GRANT` statement | Specified |
-| Prepared statements everywhere | Including the `FULLTEXT ... AGAINST` clause — the highest-risk query in the system. Bind it; sanitise BOOLEAN MODE operators separately | Specified |
+| Purpose limitation | No Portal/HR/student integration surface in the codebase; additionally the ingestion account has **no access at all** to `interactions`, `feedback` or `unanswered_questions` — chat logs are personal data and ingestion has no purpose requiring them | **Verified** — 3 probes |
+| One account per role | Web-serving, ingestion worker, and migration accounts separate, each least-privilege | **Verified** — `db/accounts_bootstrap.sql` + `db/accounts.sql` |
+| Grants verified functionally | Attempt the write that should fail; record the result. Not asserted from the `GRANT` statement | **Verified** — `bin/verify_grants.php`, 26 probes, 26 passed on 2026-08-31. Re-run after any grant change or new table |
+| Prepared statements everywhere | Including the `FULLTEXT ... AGAINST` clause — the highest-risk query in the system. Bind it; sanitise BOOLEAN MODE operators separately | Specified — but `PDO::ATTR_EMULATE_PREPARES => false` is already set for every connection in `config/pdo_options.php`, so prepares are real rather than client-side interpolation |
 | Explicit column whitelists | Every `INSERT`/`UPDATE` | Specified |
-| No hard deletion | CI grep (INV-12) | Specified |
+| No hard deletion | No account granted `DELETE` or `DROP`; runner refuses `DELETE`/`TRUNCATE`; CI grep still to build | **Verified** at grant + runner layers |
 | Secrets out of the repository | `.env` gitignored; `.env.example` carries key names and empty values only; rotation schedule stated | **Implemented** (`.gitignore`, `.env.example` present) |
 | Corpus minimisation | Never index login-protected, draft, or archived pages; personal data in a crawled page is an ingestion defect | Specified |
 | Encryption in transit | TLS to site, to generation API, to MySQL if not localhost | Specified |
@@ -117,3 +119,4 @@ Re-check the named standards for material revisions at each phase gate and recor
 | Date | Checked | Finding | By |
 |---|---|---|---|
 | 2026-08-31 | Register created at project foundation. No standards review performed yet. | — | Initial commit |
+| 2026-08-31 | Data-access controls built and verified functionally (26 probes). | **Real finding:** `NOT NULL` on a DATE column is not sufficient on a MySQL-family server without `STRICT_TRANS_TABLES` — the server substitutes `0000-00-00` and accepts the row, which defeated INV-11. Closed with `CHECK` constraints (0007) plus a strict per-connection `sql_mode`. Development is MariaDB 10.4 while production targets MySQL 8; their default modes differ, so controls must not depend on server configuration. | Schema pass |

@@ -78,10 +78,12 @@ if ($isDev) {
         'detail' => $envExists ? 'loaded' : 'not found — copy .env.example to .env',
     ];
 
-    // Database. Absent is the expected state right now: no schema has been
-    // written yet, so this reports rather than complains.
+    // Database. Connects under the least-privilege web-serving account, not the
+    // migration account — the preflight should exercise the same access the
+    // running application will have, not a more powerful one.
     $dbDetail = 'skipped — no .env';
     $dbOk = false;
+    $pdo = null;
     if ($envExists) {
         try {
             $dsn = sprintf(
@@ -90,26 +92,67 @@ if ($isDev) {
                 $env['DB_NAME'] ?? 'gu_aia',
                 $env['DB_CHARSET'] ?? 'utf8mb4'
             );
-            new PDO($dsn, $env['DB_MIGRATION_USER'] ?? '', $env['DB_MIGRATION_PASS'] ?? '', [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_TIMEOUT => 2,
-            ]);
+            $options = require $root . '/config/pdo_options.php';
+            $options[PDO::ATTR_TIMEOUT] = 2;
+            $pdo = new PDO($dsn, $env['DB_APP_USER'] ?? '', $env['DB_APP_PASS'] ?? '', $options);
             $dbOk = true;
-            $dbDetail = 'schema ' . ($env['DB_NAME'] ?? 'gu_aia') . ' reachable';
+            $dbDetail = 'schema ' . ($env['DB_NAME'] ?? 'gu_aia')
+                . ' reachable as ' . ($env['DB_APP_USER'] ?? '?') . ' (least privilege)';
         } catch (PDOException) {
             // Message deliberately not shown: a connection error leaks host,
             // user and schema names.
-            $dbDetail = 'not reachable — expected, no schema has been created yet';
+            $dbDetail = 'not reachable — check .env and db/accounts*.sql';
         }
     }
     $checks[] = ['label' => 'Database', 'ok' => $dbOk, 'detail' => $dbDetail];
 
-    $migrations = glob($root . '/db/migrations/*.sql') ?: [];
+    // Migrations: compare what is on disk with what the ledger says was applied.
+    $onDisk = count(glob($root . '/db/migrations/*.sql') ?: []);
+    $applied = null;
+    if ($pdo instanceof PDO) {
+        try {
+            $applied = (int) $pdo->query('SELECT COUNT(*) FROM schema_migrations')->fetchColumn();
+        } catch (PDOException) {
+            $applied = null;
+        }
+    }
     $checks[] = [
         'label' => 'Migrations',
-        'ok' => false,
-        'detail' => count($migrations) . ' written — the corpus schema is the next piece of work',
+        'ok' => $applied !== null && $applied === $onDisk,
+        'detail' => $applied === null
+            ? $onDisk . ' on disk; ledger unreadable'
+            : sprintf('%d of %d applied', $applied, $onDisk),
     ];
+
+    // Corpus. Empty is the CORRECT state, not a failure: Phase 0 gates indexing,
+    // and nothing may be indexed until Communications and the Registry have
+    // assigned an authoritative source, owner and review date to each fact. The
+    // row is marked "Pending" rather than "OK" so that nobody reads an empty
+    // corpus as a working one.
+    if ($pdo instanceof PDO) {
+        try {
+            $docs = (int) $pdo->query('SELECT COUNT(*) FROM documents')->fetchColumn();
+            $chunks = (int) $pdo->query('SELECT COUNT(*) FROM chunks')->fetchColumn();
+            $cats = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
+            $checks[] = [
+                'label' => 'Answer categories',
+                'ok' => $cats > 0,
+                'detail' => $cats . ' seeded from requirements.md Section 7',
+            ];
+            $checks[] = [
+                'label' => 'Corpus',
+                'ok' => false,
+                'detail' => sprintf(
+                    '%d documents, %d chunks — empty by design; Phase 0 gates indexing',
+                    $docs,
+                    $chunks
+                ),
+            ];
+        } catch (PDOException) {
+            // Fall through silently: the database row above already reports the
+            // connection state, and a second error message adds nothing.
+        }
+    }
 
     $checks[] = [
         'label' => 'Generator',
@@ -306,7 +349,7 @@ a:focus-visible, .skip:focus-visible { outline: 3px solid var(--green); outline-
     <h2>Environment preflight</h2>
     <div class="scroll">
       <table>
-        <caption>Shown in development only. A failing database row is expected at this stage &mdash; no schema has been written.</caption>
+        <caption>Shown in development only. An empty corpus is the correct state, not a failure &mdash; Phase&nbsp;0 gates indexing.</caption>
         <thead>
           <tr><th scope="col">Check</th><th scope="col">State</th><th scope="col">Detail</th></tr>
         </thead>
@@ -343,7 +386,7 @@ a:focus-visible, .skip:focus-visible { outline: 3px solid var(--green); outline-
     </ul>
 
     <h2>Next</h2>
-    <p>The corpus schema migration &mdash; documents, chunks with their embedding blob and full-text index, the interaction log, feedback. Then the invariant tests and the evaluation harness, which Section 12 requires in the first sprint rather than at the end.</p>
+    <p>The schema and the three least-privilege database accounts are in place and verified. Next are the twelve invariant tests and the evaluation harness, which Section 12 requires in the first sprint rather than at the end, and then ingestion and retrieval.</p>
     <p><strong>Phase 0 gates indexing, not schema.</strong> Nothing may be indexed until Communications and the Registry have assigned an authoritative source, an owner and a review date to each fact.</p>
 
   </div>
