@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuAia\Admin;
 
 use PDO;
+use SensitiveParameter;
 
 /**
  * Console authentication. CLAUDE.md Rule 5, requirements.md Section 14.
@@ -47,11 +48,15 @@ final class Authenticator
     public function __construct(
         private readonly PDO $pdo,
         private readonly Totp $totp = new Totp(),
+        private readonly ?SecretBox $secrets = null,
     ) {
     }
 
-    public function attempt(string $email, string $password, ?string $totpCode = null): AuthenticationResult
-    {
+    public function attempt(
+        string $email,
+        #[SensitiveParameter] string $password,
+        ?string $totpCode = null,
+    ): AuthenticationResult {
         $statement = $this->pdo->prepare(
             'SELECT id, name, email, password_hash, role, office_id, is_active,
                     failed_logins, locked_until, totp_enabled, totp_secret_enc
@@ -88,7 +93,17 @@ final class Authenticator
         $needsTwoFactor = $role->may(Role::MARK_AUTHORITATIVE) || (int) $row['totp_enabled'] === 1;
 
         if ($needsTwoFactor) {
-            $secret = $row['totp_secret_enc'] === null ? '' : (string) $row['totp_secret_enc'];
+            $stored = $row['totp_secret_enc'] === null ? '' : (string) $row['totp_secret_enc'];
+
+            // The column holds an encrypted envelope (SecretBox). A row that
+            // will not decrypt - wrong key, tampered tag, truncated value - is
+            // treated exactly like a missing secret: unusable, so no sign-in.
+            // Falling back to reading it as plaintext would quietly undo the
+            // encryption the moment one row went bad.
+            $secret = '';
+            if ($stored !== '' && $this->secrets !== null) {
+                $secret = (string) $this->secrets->decrypt($stored);
+            }
 
             if ($secret === '') {
                 // An authoriser without an enrolled second factor cannot sign in
@@ -117,7 +132,7 @@ final class Authenticator
     }
 
     /** For bin/create_admin.php and for password changes. */
-    public static function hash(string $password): string
+    public static function hash(#[SensitiveParameter] string $password): string
     {
         return password_hash($password, PASSWORD_BCRYPT, self::HASH_OPTIONS);
     }

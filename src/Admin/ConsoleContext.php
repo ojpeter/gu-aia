@@ -28,6 +28,14 @@ final readonly class ConsoleContext
         public AuditLog $audit,
         public ?AuthenticatedUser $user,
         public string $clientIp,
+        /**
+         * Null when SECRET_ENCRYPTION_KEY is unset or malformed. That is
+         * fail-closed by construction: without it, an encrypted TOTP secret
+         * cannot be decrypted, so an account requiring a second factor simply
+         * cannot sign in. A misconfigured key locks authorisers out rather than
+         * quietly letting them past.
+         */
+        public ?SecretBox $secrets = null,
     ) {
     }
 

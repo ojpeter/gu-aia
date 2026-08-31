@@ -28,6 +28,7 @@ require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 use GuAia\Admin\AuthenticatedUser;
 use GuAia\Admin\ConsoleContext;
 use GuAia\Admin\Role;
+use GuAia\Admin\SecretBox;
 use GuAia\Logging\AuditLog;
 use GuAia\Logging\IdentifierHasher;
 use GuAia\Safety\Csrf;
@@ -91,6 +92,17 @@ try {
     );
     $hasher = new IdentifierHasher($env['LOG_HASH_KEY'] ?? '');
     $audit = new AuditLog($pdo, $hasher);
+
+    // Left null on a missing or malformed key rather than throwing: the
+    // console must still serve its sign-in page so an operator can see the
+    // problem, and every account that needs a second factor is refused
+    // anyway because the secret will not decrypt.
+    $secrets = null;
+    try {
+        $secrets = new SecretBox($env['SECRET_ENCRYPTION_KEY'] ?? '');
+    } catch (Throwable $e) {
+        error_log('[gu-aia console] ' . $e->getMessage());
+    }
 } catch (Throwable $e) {
     error_log('[gu-aia console] ' . $e->getMessage());
     http_response_code(503);
@@ -125,4 +137,5 @@ return new ConsoleContext(
     audit: $audit,
     user: $currentUser,
     clientIp: (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+    secrets: $secrets,
 );

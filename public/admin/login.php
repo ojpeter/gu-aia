@@ -18,6 +18,7 @@ declare(strict_types=1);
 $console = require __DIR__ . '/_bootstrap.php';
 
 use GuAia\Admin\Authenticator;
+use GuAia\Admin\SecretBox;
 use GuAia\Logging\AuditLog;
 
 if ($console->isSignedIn()) {
@@ -31,7 +32,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!$console->csrf->verify((string) ($_POST['csrf_token'] ?? ''))) {
         $error = 'Your session expired. Please try again.';
     } else {
-        $result = (new Authenticator($console->pdo))->attempt(
+        $result = (new Authenticator($console->pdo, secrets: $console->secrets))->attempt(
             (string) ($_POST['email'] ?? ''),
             (string) ($_POST['password'] ?? ''),
             ($_POST['totp'] ?? '') === '' ? null : (string) $_POST['totp'],

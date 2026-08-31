@@ -6,6 +6,7 @@ namespace GuAia\Tests\Integration;
 
 use GuAia\Admin\Authenticator;
 use GuAia\Admin\Role;
+use GuAia\Admin\SecretBox;
 use GuAia\Admin\Totp;
 use GuAia\Logging\AuditLog;
 use GuAia\Logging\IdentifierHasher;
@@ -27,6 +28,9 @@ final class AuthenticationTest extends TestCase
 
     private const PASSWORD = 'correct-horse-battery-staple';
 
+    /** Fixed for tests only. Production reads SECRET_ENCRYPTION_KEY from .env. */
+    private const TEST_KEY = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+
     protected function setUp(): void
     {
         $this->pdo = Database::connect();
@@ -47,7 +51,7 @@ final class AuthenticationTest extends TestCase
     {
         $email = $this->createUser(Role::Reader);
 
-        $result = (new Authenticator($this->pdo))->attempt($email, self::PASSWORD);
+        $result = (new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, self::PASSWORD);
 
         self::assertTrue($result->successful);
         self::assertNotNull($result->user);
@@ -58,7 +62,7 @@ final class AuthenticationTest extends TestCase
     {
         $email = $this->createUser(Role::Reader);
 
-        self::assertFalse((new Authenticator($this->pdo))->attempt($email, 'wrong')->successful);
+        self::assertFalse((new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, 'wrong')->successful);
     }
 
     public function testAnUnknownAccountAndAWrongPasswordAreIndistinguishable(): void
@@ -66,7 +70,7 @@ final class AuthenticationTest extends TestCase
         // Staff emails at a university are guessable by construction, so the
         // login form must not confirm which ones exist.
         $email = $this->createUser(Role::Reader);
-        $authenticator = new Authenticator($this->pdo);
+        $authenticator = new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY));
 
         $wrongPassword = $authenticator->attempt($email, 'wrong');
         $noSuchAccount = $authenticator->attempt('nobody@gu.ac.ug', 'wrong');
@@ -80,13 +84,13 @@ final class AuthenticationTest extends TestCase
     {
         $email = $this->createUser(Role::Reader, active: false);
 
-        self::assertFalse((new Authenticator($this->pdo))->attempt($email, self::PASSWORD)->successful);
+        self::assertFalse((new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, self::PASSWORD)->successful);
     }
 
     public function testRepeatedFailuresLockTheAccountTemporarily(): void
     {
         $email = $this->createUser(Role::Reader);
-        $authenticator = new Authenticator($this->pdo);
+        $authenticator = new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY));
 
         for ($i = 0; $i < 5; $i++) {
             $authenticator->attempt($email, 'wrong');
@@ -110,7 +114,7 @@ final class AuthenticationTest extends TestCase
     public function testASuccessfulSignInClearsTheFailureCount(): void
     {
         $email = $this->createUser(Role::Reader);
-        $authenticator = new Authenticator($this->pdo);
+        $authenticator = new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY));
 
         $authenticator->attempt($email, 'wrong');
         $authenticator->attempt($email, 'wrong');
@@ -126,7 +130,7 @@ final class AuthenticationTest extends TestCase
         $secret = Totp::generateSecret();
         $email = $this->createUser(Role::Authoriser, totpSecret: $secret);
 
-        $authenticator = new Authenticator($this->pdo);
+        $authenticator = new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY));
 
         self::assertFalse(
             $authenticator->attempt($email, self::PASSWORD)->successful,
@@ -149,7 +153,7 @@ final class AuthenticationTest extends TestCase
         // the same generic failure.
         $email = $this->createUser(Role::Authoriser, totpSecret: null);
 
-        $result = (new Authenticator($this->pdo))->attempt($email, self::PASSWORD, '123456');
+        $result = (new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, self::PASSWORD, '123456');
 
         self::assertFalse($result->successful);
         self::assertSame('two_factor_not_enrolled', $result->operatorReason);
@@ -160,7 +164,7 @@ final class AuthenticationTest extends TestCase
     {
         $email = $this->createUser(Role::Authoriser, totpSecret: Totp::generateSecret());
 
-        self::assertFalse((new Authenticator($this->pdo))->attempt($email, self::PASSWORD, '000000')->successful);
+        self::assertFalse((new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, self::PASSWORD, '000000')->successful);
     }
 
     public function testAFailedSignInIsAuditedWithoutNamingAnAccount(): void
@@ -184,7 +188,7 @@ final class AuthenticationTest extends TestCase
     public function testTheAuditLogRecordsWhoDidWhat(): void
     {
         $email = $this->createUser(Role::Authoriser, totpSecret: $secret = Totp::generateSecret());
-        $result = (new Authenticator($this->pdo))->attempt($email, self::PASSWORD, (new Totp())->codeAt($secret));
+        $result = (new Authenticator($this->pdo, secrets: new SecretBox(self::TEST_KEY)))->attempt($email, self::PASSWORD, (new Totp())->codeAt($secret));
 
         self::assertNotNull($result->user);
 
@@ -222,7 +226,8 @@ final class AuthenticationTest extends TestCase
             'hash' => Authenticator::hash(self::PASSWORD),
             'role' => $role->value,
             'active' => $active ? 1 : 0,
-            'secret' => $totpSecret,
+            // Stored encrypted, exactly as bin/create_admin.php writes it.
+            'secret' => $totpSecret === null ? null : (new SecretBox(self::TEST_KEY))->encrypt($totpSecret),
             'enabled' => $totpSecret === null ? 0 : 1,
         ]);
 

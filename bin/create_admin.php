@@ -27,6 +27,7 @@ require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use GuAia\Admin\Authenticator;
 use GuAia\Admin\Role;
+use GuAia\Admin\SecretBox;
 use GuAia\Admin\Totp;
 
 $root = dirname(__DIR__);
@@ -104,8 +105,19 @@ try {
 }
 
 $secret = null;
+$storedSecret = null;
 if ($role === Role::Authoriser) {
+    // Encrypted before it touches the database. The plaintext exists only long
+    // enough to print once, and is never written anywhere.
+    try {
+        $box = new SecretBox($env['SECRET_ENCRYPTION_KEY'] ?? '');
+    } catch (RuntimeException $e) {
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
+
     $secret = Totp::generateSecret();
+    $storedSecret = $box->encrypt($secret);
 }
 
 try {
@@ -118,8 +130,8 @@ try {
         'email' => strtolower(trim($email)),
         'hash' => Authenticator::hash($password),
         'role' => $role->value,
-        'secret' => $secret,
-        'enabled' => $secret === null ? 0 : 1,
+        'secret' => $storedSecret,
+        'enabled' => $storedSecret === null ? 0 : 1,
     ]);
 } catch (PDOException $e) {
     if (str_contains($e->getMessage(), 'uq_admin_email')) {
@@ -141,8 +153,9 @@ if ($secret !== null) {
     echo "cannot be recovered, and without it this account cannot sign in.\n\n";
     printf("  Secret: %s\n", $secret);
     printf("  URI:    otpauth://totp/%s?secret=%s&issuer=%s\n", $label, $secret, $issuer);
-    echo "\nNOTE: the secret is stored unencrypted in totp_secret_enc. The column is\n";
-    echo "named for encryption at rest, which is not yet implemented — see progress.md.\n";
+    echo "\nThe stored copy is encrypted at rest under SECRET_ENCRYPTION_KEY (AES-256-GCM).\n";
+    echo "If that key is lost this account cannot sign in again and must be re-enrolled,\n";
+    echo "which is the correct trade: a recoverable second factor is not a second factor.\n";
 }
 
 exit(0);
