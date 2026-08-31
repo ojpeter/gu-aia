@@ -122,6 +122,7 @@ final class AnsweringPipeline
             mode: AnswerMode::Grounded,
             text: $bound->text,
             sources: $cited,
+            retrieved: $retrieval->chunks,
             citations: $bound->citations,
             categoryKey: $routing->categoryKey,
             staleSource: $retrieval->hasStaleSource(),
@@ -158,6 +159,7 @@ final class AnsweringPipeline
             // Verbatim. No summarising, no rounding, no "approximately".
             text: $chosen->body,
             sources: [$chosen],
+            retrieved: $retrieval->chunks,
             citations: [$reference => $chosen->chunkId],
             categoryKey: $categoryKey,
             staleSource: $chosen->isStale(),
@@ -177,6 +179,7 @@ final class AnsweringPipeline
             mode: AnswerMode::Degraded,
             text: $this->refusals->render('degraded_mode', null)->text,
             sources: $retrieval->chunks,
+            retrieved: $retrieval->chunks,
             citations: $citations,
             categoryKey: $categoryKey,
             staleSource: $retrieval->hasStaleSource(),

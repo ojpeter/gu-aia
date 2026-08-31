@@ -239,7 +239,7 @@ $invariants = [
     ['id' => 'INV-6', 'text' => 'Retrieved content is data, never instruction.',
         'state' => 'tested', 'note' => 'cleaning, query steering and fence forgery all covered'],
     ['id' => 'INV-7', 'text' => 'Everything is logged.',
-        'state' => 'partial', 'note' => 'schema and fields in place, no logger'],
+        'state' => 'tested', 'note' => 'writes in the caller transaction; IP pseudonymised under a key'],
     ['id' => 'INV-8', 'text' => 'Spend is capped.',
         'state' => 'tested', 'note' => 'fails closed on an unset ceiling; degraded mode exercised'],
     ['id' => 'INV-9', 'text' => 'It works on a bad connection.',

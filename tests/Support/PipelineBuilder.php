@@ -62,14 +62,22 @@ final class PipelineBuilder
         return $this;
     }
 
+    /**
+     * @param int|null $chunkId a REAL chunks.id when the test also writes to the
+     *   database. The interaction log has foreign keys onto chunks, so logging a
+     *   retrieval against an invented id is refused by the server - correctly,
+     *   since a citation pointing at a chunk that does not exist would make
+     *   INV-1's audit trail worthless.
+     */
     public function withChunk(
         string $body,
         bool $authoritative = false,
         string $reviewedAt = '2026-06-01',
         int $reviewIntervalDays = 365,
+        ?int $chunkId = null,
     ): self {
         $this->chunks[] = new ScoredChunk(
-            chunkId: 100 + count($this->chunks),
+            chunkId: $chunkId ?? (100 + count($this->chunks)),
             documentId: 1,
             body: $body,
             score: 0.9,

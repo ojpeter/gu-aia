@@ -18,6 +18,10 @@ final readonly class AnswerResult
 {
     /**
      * @param list<ScoredChunk> $sources        cited or quoted; never the whole candidate pool
+     * @param list<ScoredChunk> $retrieved      everything retrieval returned, cited or not. Section 13
+     *                                          logs "retrieved chunk IDs and scores", which is how the
+     *                                          threshold gets tuned against evidence rather than feel;
+     *                                          the chunks that did NOT win are the informative half
      * @param array<int, int>   $citations      reference number => chunk id
      * @param bool              $staleSource    INV-11: the answer must carry a visible caution
      * @param bool              $handoffMissing the refusal names no contact; see RefusalRenderer
@@ -26,6 +30,7 @@ final readonly class AnswerResult
         public AnswerMode $mode,
         public string $text,
         public array $sources = [],
+        public array $retrieved = [],
         public array $citations = [],
         public ?string $categoryKey = null,
         public ?string $refusalReason = null,
