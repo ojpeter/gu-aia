@@ -75,7 +75,7 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | Control | Where | Status |
 |---|---|---|
 | Server-side validation through one shared validator | `src/Safety/` | Specified |
-| Upload: extension whitelist, size cap, `finfo` MIME re-validation; reject scanned PDFs with no text layer | `src/Ingestion/` | Specified |
+| Reject scanned PDFs with no text layer; size cap on fetch | `Ingestion\PdfExtractor` rejects below a text threshold; `HttpFetcher` caps the response at 8 MB | **Verified** for rejection. Console *upload* is not built — documents are fetched, not uploaded — so `finfo` re-validation has nothing to guard yet and stays Specified |
 | Output encoding via one shared escaping helper | `templates/` | Specified |
 | CSRF token on every state-changing form, incl. feedback and the no-JS post | `public/`, `src/Safety/` | Specified |
 | Admin auth: `password_hash()`, session regeneration, secure/httponly/samesite cookies, inactivity timeout, 2FA for authoritative-flag roles | `Admin\Authenticator` (bcrypt cost 12, temporary lockout, identical response for every failure kind, hash computed even for unknown accounts so timing does not enumerate); `public/admin/_bootstrap.php` (SameSite=**Strict**, separate cookie name, 30-minute idle, regeneration on sign-in); `Admin\Totp` (RFC 6238, constant-time, one step of drift) | **Verified** — `AdminSecurityTest` (13) + `Integration\AuthenticationTest` (11), including an RFC 4226 known-answer test so the TOTP interoperates with real authenticator apps rather than being self-consistently wrong |
@@ -178,7 +178,7 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | Conflicts detected between sources | **Built** — listed on the authoritative-sources screen, with Section 5.2's framing stated on the page: a conflict is a *content defect to be fixed*, and marking one source authoritative decides which the assistant quotes without making the other correct |
 | Unanswered-question report and feedback stream | **Built**, and placed **first on the page** deliberately — Section 13 calls the report a primary deliverable, so putting the corpus browser first would make this a content-management screen with a report attached, which is the wrong way round |
 | View the last evaluation run | **Built** |
-| Trigger a re-index | **Not built**, and it needs the crawler and PDF extractor first, so it is really their prerequisite rather than a console gap. Listed on the page as unbuilt rather than shown as a disabled button |
+| Trigger a re-index | **Built.** Queues an `ingest_runs` row for the worker rather than crawling inside the request — a full re-index is minutes of work, and a browser timing out halfway would leave the corpus half-superseded with nobody able to tell. Also keeps the boundary honest: ingestion writes under the ingestion account, not the console session |
 | Author and edit curated Q&A entries | **Built and verified.** Backed by real `documents` and `chunks` rows with an embedding, so a curated answer flows through the same retrieval, citation and `reviewed_at` machinery as crawled content rather than being a special case that bypasses the invariants. **Editing supersedes, never overwrites** (INV-12): a past answer stays reconstructible, and the form says so where the person editing can see it |
 | Mark a document authoritative for a category | **Built and verified.** Exactly one authoritative source per category is enforced in the same transaction — two would make the outcome depend on retrieval order, which is the ambiguity the flag exists to remove. The flag **propagates to the chunks**, which denormalise it; a document flagged without its chunks would be authoritative in the console and not in the answering pipeline, while the screen showed the change had worked. A superseded document, or one filed under another category, is refused |
 | "No content editing capability beyond curated entries" | **Verified** — there is no `edit_corpus` permission to grant, and a test asserts no role has one. Section 14: "the console must never become a second place where facts live" |
@@ -189,6 +189,24 @@ Account creation is `bin/create_admin.php`, run at a terminal under the migratio
 
 ---
 
+## 13. Ingestion (`requirements.md` Section 5)
+
+| Control | Status |
+|---|---|
+| Crawl restricted to the domain and an allow-list | **Verified** — `Ingestion\HttpFetcher`. HTTPS only, host must match or be a subdomain, exclusions win over allowances, and **an empty allow-list allows nothing**, so forgetting to configure it is not the same as deciding to crawl the whole site. A redirect leaving the allow-list is refused, not followed — redirects are the usual way a scope restriction leaks |
+| Login-protected, draft and archived pages never crawled | **Implemented** — via the exclusion list; the specific paths come from Phase 0 |
+| Structure-aware extraction | **Verified** — `HtmlExtractor` turns a page into blocks, and a `<table>` becomes ONE atomic block with its caption, which is what makes "never split a fees table" achievable downstream |
+| Boilerplate removed | **Verified** — navigation, headers, footers, cookie banners. Not tidiness: boilerplate repeats sitewide, so leaving it in would give every chunk the same few hundred words in common and retrieval would rank on menus |
+| Scanned PDFs rejected, not OCR'd into noise | **Verified** — and the principle is applied to *every* extraction failure, since the reasoning is identical: a gap produces a refusal, which is correct; approximate text produces a confident answer built on nonsense |
+| Rejections reported to the owning office | **Verified** — recorded on the document row with a reason, and surfaced in the console. A rejection that only appears in a log is one the office that could fix it never hears about |
+| INV-11 enforced before fetching | **Verified** — no owner, review date or interval means no request is even spent |
+| Unchanged content not re-indexed | **Verified** — content-hash comparison. A nightly crawl over a stable corpus should report almost entirely *unchanged*; a run reporting everything re-ingested is one where change detection has broken and every embedding has just been churned |
+| Re-ingestion supersedes | **Verified** (INV-12) — a changed page becomes a new document and chunks, the old ones superseded and linked |
+
+**The PDF extractor is deliberately limited, and the limit is the design.** It reads uncompressed and Flate-compressed content streams and the text-showing operators — enough for PDFs published from a word processor. It does not recover column layout or page structure, and unusual encodings can defeat it. When it cannot read a document confidently it **refuses**, and the document is reported rather than indexed. If real University PDFs defeat it regularly, the answer is a reviewed parser dependency or a text-based publication process — not loosening the threshold until things stop being rejected.
+
+---
+
 ## 7. Maintenance record
 
 Re-check the named standards for material revisions at each phase gate and record the check here — **including a finding of "no change."**
@@ -196,6 +214,7 @@ Re-check the named standards for material revisions at each phase gate and recor
 | Date | Checked | Finding | By |
 |---|---|---|---|
 | 2026-08-31 | Register created at project foundation. No standards review performed yet. | — | Initial commit |
+| 2026-09-01 | Ingestion built: fetcher, HTML and PDF extractors, ingester, CLI and console re-index. 350 tests, 1013 assertions. | The empty allow-list is the Phase 0 gate in code: `bin/ingest.php` currently ingests nothing and explains why, rather than defaulting to crawling the site. **The live site was not crawled** — every test drives the ingester from fixtures, because a suite that reached gu.ac.ug would be indexing before Phase 0 every time it ran. | Ingestion |
 | 2026-08-31 | Authoritative-source marking built; 339 tests, 972 assertions. | The highest-consequence action in the system: it does not change what a document says, it changes which one the assistant quotes when two disagree — for fees, the figure the public is shown. Permission checked at the page guard **and again** in the marker, because a privileged action that trusts its caller is one refactor away from being unguarded. Verified in the running console that an editor gets 403 and the denial is audited. | Authoritative sources |
 | 2026-08-31 | Curated Q&A authoring built; 329 tests, 953 assertions; a fourth database account added. | Section 14 requires the console to author curated entries, which are corpus content, while `gu_aia_app` is deliberately unable to write the corpus. Rather than widening the app's grants, a `gu_aia_console` account was added: the risk being guarded against is an *unauthenticated request path* writing published content, and an authenticated audited console action is a different thing. The app's inability to write the corpus stays intact and provable. | Curated entries |
 | 2026-08-31 | TOTP secrets encrypted at rest; 315 tests, 837 assertions. | Closes the gap flagged the same day rather than building more surface over it. The negative tests are the ones that matter: a tampered ciphertext, a tampered tag, a wrong key, an unknown envelope version and **legacy plaintext** must all fail to decrypt. That last one is the migration trap — accepting a plaintext row “for compatibility” would undo the encryption for every row that had not been rewritten. | Secret encryption |

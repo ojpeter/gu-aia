@@ -36,6 +36,8 @@
         "lint": "phpcs",
         "check:no-delete": "! grep -rniE '\\b(DELETE[[:space:]]+FROM|->delete\\()' src bin public",
         "eval:seed": "php bin/seed_eval_questions.php",
+        "ingest": "php bin/ingest.php",
+        "redact": "php bin/redact_expired.php",
         "grants:verify": "php bin/verify_grants.php",
         "migrate": "php bin/migrate.php",
         "ci": [

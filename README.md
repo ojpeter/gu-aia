@@ -8,11 +8,15 @@ Owned by the Directorate of ICT Services. Business-owned by the Directorate of C
 
 ---
 
-## Current status — foundations only
+## Current status — Phase 1 feature-complete as engineering
 
-**Nothing works yet.** As of 2026-08-31 this repository contains the specification, the engineering rules, the standards register, and the scaffolding. There is no ingestion, no retrieval, no answering, no widget, and no schema. Do not read the configuration files as a description of a running system.
+As of 2026-09-01: the schema and four least-privilege database accounts, ingestion (fetcher, HTML and PDF extractors, chunker, embedder), hybrid retrieval, the answering pipeline, the versioned prompt, the interaction logger, retention by redaction, the public widget with its no-JavaScript fallback, the admin console, and the evaluation harness. **All twelve invariants have passing named tests** — 350 tests, 1013 assertions, PHPStan level 8 clean, PSR-12 clean, 37/37 database-grant probes.
 
-See `progress.md` for exactly what exists and what is next.
+**The assistant currently refuses every question, and that is correct.** The corpus is empty because Phase 0 gates indexing, and the retrieval threshold and budget ceiling are unset and fail closed. That is the honest behaviour of a system with nothing to answer from.
+
+**Twelve tested invariants is not the same claim as a safe system.** Each has a mechanism and a test *for that mechanism*; several also have a behavioural half that only the evaluation harness can measure, and it cannot measure anything without a corpus. 35 of 118 golden questions report PENDING for exactly that reason.
+
+`progress.md` lists the four things blocking launch. **None of them is code.**
 
 ## Read these, in this order
 
@@ -42,9 +46,15 @@ PHP 8.2+, MySQL 8 (schema `gu_aia`), hybrid retrieval (MySQL `FULLTEXT` candidat
 ```bash
 cp .env.example .env          # then fill it in; .env is never committed
 composer install
-php bin/migrate.php --status  # list applied and pending migrations
-php bin/migrate.php           # apply them
+mysql -u root -p < db/accounts_bootstrap.sql   # schema + migration account
+php bin/migrate.php                           # apply migrations
+mysql -u root -p < db/accounts.sql            # table grants (needs the tables)
+php bin/verify_grants.php                     # prove the grants, never assume them
+php bin/seed_eval_questions.php               # seed the golden question set
+php bin/create_admin.php "Name" you@gu.ac.ug editor
 ```
+
+The public widget is at `ask.php`; the console at `admin/login.php`.
 
 `GENERATOR_DRIVER=fake` is the default: the whole system must be testable and demonstrable **with no API key and no spend**.
 
@@ -56,6 +66,10 @@ composer test:invariant   # the release gate — requirements.md Section 2
 composer analyse          # PHPStan
 composer lint             # PSR-12
 composer eval             # evaluation harness (Section 12)
+composer ci               # the whole gate: analyse, lint, test, eval
+composer ingest           # ingest configured corpus sources (none until Phase 0)
+composer redact           # retention sweep (refuses without LOG_RETENTION_DAYS)
+php bin/verify_grants.php # prove every database grant functionally
 ```
 
 ## Related projects

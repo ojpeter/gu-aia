@@ -13,9 +13,8 @@
  *
  * The write actions live on their own screens, linked from the bar and only for
  * the roles that may use them: curated.php (editor and above) and
- * authoritative.php (authoriser, second factor required). Re-indexing is the one
- * thing still unbuilt, and the page lists it as such rather than showing a
- * disabled button that implies it nearly works.
+ * authoritative.php (authoriser, second factor required). Re-indexing is queued
+ * from here for the ingestion worker rather than run inside the request.
  *
  * THE UNANSWERED-QUESTION REPORT IS FIRST ON THE PAGE, DELIBERATELY. Section 13:
  * "Treat this report as a primary deliverable... it is likely to be worth more
@@ -111,6 +110,10 @@ header('Referrer-Policy: no-referrer');
 
 <main>
 
+<?php if (isset($_GET['queued'])): ?>
+  <p class="empty" role="status">Re-index queued. The ingestion worker will pick it up; nothing has changed yet.</p>
+<?php endif; ?>
+
   <section>
     <h2>Unanswered questions, last 7 days</h2>
     <p class="lede">What the public came looking for and could not find. Section&nbsp;13 calls this a primary deliverable.</p>
@@ -196,13 +199,17 @@ header('Referrer-Policy: no-referrer');
     </ul>
   </section>
 
+<?php if ($user->may(Role::TRIGGER_REINDEX)): ?>
   <section>
-    <h2>Not built yet</h2>
-    <p class="lede">Listed rather than shown as disabled buttons, which would imply they nearly work.</p>
-    <ul>
-      <li>Triggering a re-index of a document or the whole corpus &mdash; this needs the crawler and PDF extractor, which do not exist yet, so it is really their prerequisite rather than a console gap</li>
-    </ul>
+    <h2>Re-index</h2>
+    <p class="lede">Queues a run for the ingestion worker rather than crawling inside this request. A full re-index is minutes of work, and a browser timing out halfway would leave the corpus half-superseded with nobody able to tell.</p>
+    <p class="lede"><strong>Section&nbsp;12 requires the evaluation harness to be re-run and recorded after every re-index</strong> &mdash; content changes break retrieval as surely as code does.</p>
+    <form method="post" action="reindex.php">
+      <?= $console->csrf->field() ?>
+      <button type="submit">Queue a full re-index</button>
+    </form>
   </section>
+<?php endif; ?>
 
 </main>
 </body>
