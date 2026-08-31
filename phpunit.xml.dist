@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         beStrictAboutOutputDuringTests="true">
+    <testsuites>
+        <!-- Invariant tests are listed first deliberately: they are the release
+             gate (requirements.md Section 2). An invariant without a passing test
+             is an invariant that is not implemented. -->
+        <testsuite name="invariant">
+            <directory>tests/Invariant</directory>
+        </testsuite>
+        <testsuite name="unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+
+    <php>
+        <!-- The whole system must be testable and demonstrable with no API key
+             and no spend (CLAUDE.md Rule 10). -->
+        <env name="APP_ENV" value="testing"/>
+        <env name="GENERATOR_DRIVER" value="fake"/>
+    </php>
+</phpunit>

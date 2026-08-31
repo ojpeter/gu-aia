@@ -1,0 +1,49 @@
+# GU-AIA — front controller routing and hardening.
+#
+# The document root for this project is public/. Under XAMPP the project sits at
+# htdocs/gu-aia, so http://localhost/gu-aia/ resolves to the project ROOT, not to
+# public/. This file rewrites every request into public/ so that config/, src/,
+# db/, docs/, storage/, .env and the migration runner are never web-reachable —
+# routing, and defence in depth, in one place (CLAUDE.md Rule 5).
+#
+# In production, point the vhost DocumentRoot at public/ directly and this
+# rewrite becomes redundant rather than load-bearing.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Everything under public/ is already in the right place.
+    RewriteRule ^public/ - [L]
+
+    # Send every other request into public/, preserving the path and query string.
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Belt and braces: even with mod_rewrite off or misconfigured, refuse the paths
+# that must never be served. A rewrite rule is routing; these are a deny.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(sql|neon|dist|lock|md)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_alias.c>
+    RedirectMatch 404 ^/gu-aia/(config|src|db|docs|storage|bin|tests|vendor)(/|$)
+</IfModule>
+
+# No directory listing anywhere in this project.
+Options -Indexes
+
+# Security headers. Deliberately set, not copy-pasted: the CSP is tight because
+# this project serves no third-party assets at all, and frame-ancestors is
+# restrictive because the widget's embed origin is configured (WIDGET_ALLOWED_ORIGIN)
+# rather than open. Revisit frame-ancestors when the widget is actually embedded
+# in gu-website — that is a cross-project change (CLAUDE.md Rule 11).
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+</IfModule>
