@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * GU-AIA migration runner.
  *
@@ -21,6 +19,8 @@ declare(strict_types=1);
  * nowhere else.
  */
 
+declare(strict_types=1);
+
 const MIGRATIONS_DIR = __DIR__ . '/../db/migrations';
 
 $env = load_env(__DIR__ . '/../.env');
@@ -36,8 +36,18 @@ try {
 
 ensure_ledger($pdo);
 
-$applied = $pdo->query('SELECT filename FROM schema_migrations ORDER BY filename')
-    ->fetchAll(PDO::FETCH_COLUMN);
+// PDO::query() is typed PDOStatement|false. With ERRMODE_EXCEPTION it throws
+// instead of returning false, but the signature does not say so, and chaining
+// straight off it would be an unchecked call. Kept explicit rather than
+// suppressed.
+$appliedStmt = $pdo->query('SELECT filename FROM schema_migrations ORDER BY filename');
+if ($appliedStmt === false) {
+    fwrite(STDERR, "Could not read the schema_migrations ledger.\n");
+    exit(1);
+}
+
+/** @var list<string> $applied */
+$applied = $appliedStmt->fetchAll(PDO::FETCH_COLUMN);
 
 $all = glob(MIGRATIONS_DIR . '/*.sql') ?: [];
 sort($all, SORT_STRING);

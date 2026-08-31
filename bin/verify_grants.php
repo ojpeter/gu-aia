@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Functional verification of the database grants. CLAUDE.md Rule 3.
  *
@@ -24,6 +22,8 @@ declare(strict_types=1);
  * denied probes are refused before they touch data, and the allowed probes are
  * reads or no-op updates against ids that do not exist.
  */
+
+declare(strict_types=1);
 
 $root = dirname(__DIR__);
 

@@ -1,0 +1,10 @@
+# Normalise line endings in the repository. PHP_CodeSniffer enforces LF
+# (PSR-12), and a Windows checkout would otherwise reintroduce CRLF on every
+# edit and fail the lint.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary

@@ -55,12 +55,38 @@ $esc = static fn (?string $v): string => htmlspecialchars((string) $v, ENT_QUOTE
 /** @var list<array{label: string, ok: bool, detail: string}> $checks */
 $checks = [];
 
+/**
+ * Single-value query that tolerates PDO::query()'s PDOStatement|false signature.
+ * Returns null when the query cannot run, so a missing grant shows as an honest
+ * unknown rather than a fabricated zero.
+ */
+$scalar = static function (PDO $pdo, string $sql): ?int {
+    try {
+        $stmt = $pdo->query($sql);
+        if ($stmt === false) {
+            return null;
+        }
+        $value = $stmt->fetchColumn();
+
+        return $value === false ? null : (int) $value;
+    } catch (PDOException) {
+        return null;
+    }
+};
+
 if ($isDev) {
-    $phpOk = PHP_VERSION_ID >= 80200;
+    // The minimum is read from composer.json rather than restated here, so
+    // there is one source of truth for the requirement.
+    $composer = json_decode((string) file_get_contents($root . '/composer.json'), true);
+    $requiredPhp = is_array($composer) && isset($composer['require']['php'])
+        ? (string) $composer['require']['php']
+        : '>=8.2';
+    $phpOk = version_compare(PHP_VERSION, ltrim($requiredPhp, '>=~^'), '>=');
     $checks[] = [
-        'label' => 'PHP 8.2+',
+        'label' => 'PHP ' . $requiredPhp,
         'ok' => $phpOk,
-        'detail' => $phpOk ? 'running ' . PHP_VERSION : 'running ' . PHP_VERSION . ' — requirements.md Section 3 requires 8.2+',
+        'detail' => 'running ' . PHP_VERSION
+            . ($phpOk ? '' : ' — requirements.md Section 3 requires ' . $requiredPhp),
     ];
 
     foreach (['pdo_mysql', 'mbstring', 'fileinfo', 'json'] as $ext) {
@@ -108,14 +134,7 @@ if ($isDev) {
 
     // Migrations: compare what is on disk with what the ledger says was applied.
     $onDisk = count(glob($root . '/db/migrations/*.sql') ?: []);
-    $applied = null;
-    if ($pdo instanceof PDO) {
-        try {
-            $applied = (int) $pdo->query('SELECT COUNT(*) FROM schema_migrations')->fetchColumn();
-        } catch (PDOException) {
-            $applied = null;
-        }
-    }
+    $applied = $pdo instanceof PDO ? $scalar($pdo, 'SELECT COUNT(*) FROM schema_migrations') : null;
     $checks[] = [
         'label' => 'Migrations',
         'ok' => $applied !== null && $applied === $onDisk,
@@ -130,15 +149,19 @@ if ($isDev) {
     // row is marked "Pending" rather than "OK" so that nobody reads an empty
     // corpus as a working one.
     if ($pdo instanceof PDO) {
-        try {
-            $docs = (int) $pdo->query('SELECT COUNT(*) FROM documents')->fetchColumn();
-            $chunks = (int) $pdo->query('SELECT COUNT(*) FROM chunks')->fetchColumn();
-            $cats = (int) $pdo->query('SELECT COUNT(*) FROM categories')->fetchColumn();
+        $docs = $scalar($pdo, 'SELECT COUNT(*) FROM documents');
+        $chunks = $scalar($pdo, 'SELECT COUNT(*) FROM chunks');
+        $cats = $scalar($pdo, 'SELECT COUNT(*) FROM categories');
+
+        if ($cats !== null) {
             $checks[] = [
                 'label' => 'Answer categories',
                 'ok' => $cats > 0,
                 'detail' => $cats . ' seeded from requirements.md Section 7',
             ];
+        }
+
+        if ($docs !== null && $chunks !== null) {
             $checks[] = [
                 'label' => 'Corpus',
                 'ok' => false,
@@ -148,9 +171,6 @@ if ($isDev) {
                     $chunks
                 ),
             ];
-        } catch (PDOException) {
-            // Fall through silently: the database row above already reports the
-            // connection state, and a second error message adds nothing.
         }
     }
 
@@ -161,21 +181,43 @@ if ($isDev) {
     ];
 }
 
-/** @var list<array{id: string, text: string}> $invariants */
+/**
+ * The twelve invariants and their REAL state, not their intended state.
+ *
+ * 'tested'    a named test in tests/Invariant/ passes
+ * 'partial'   enforced somewhere real (schema or grant table) but no test file
+ * 'specified' written down, nothing built
+ *
+ * @var list<array{id: string, text: string, state: string, note: string}> $invariants
+ */
 $invariants = [
-    ['id' => 'INV-1', 'text' => 'No answer without a source.'],
-    ['id' => 'INV-2', 'text' => 'High-stakes facts are quoted, never paraphrased.'],
-    ['id' => 'INV-3', 'text' => 'No individual outcome.'],
-    ['id' => 'INV-4', 'text' => 'Disclosure, before the first answer.'],
-    ['id' => 'INV-5', 'text' => 'Closed retrieval scope.'],
-    ['id' => 'INV-6', 'text' => 'Retrieved content is data, never instruction.'],
-    ['id' => 'INV-7', 'text' => 'Everything is logged.'],
-    ['id' => 'INV-8', 'text' => 'Spend is capped.'],
-    ['id' => 'INV-9', 'text' => 'It works on a bad connection.'],
-    ['id' => 'INV-10', 'text' => 'No personal data in Phase 1.'],
-    ['id' => 'INV-11', 'text' => 'Stale content is visible.'],
-    ['id' => 'INV-12', 'text' => 'Nothing is deleted.'],
+    ['id' => 'INV-1', 'text' => 'No answer without a source.',
+        'state' => 'tested', 'note' => 'citation binder discards uncited answers'],
+    ['id' => 'INV-2', 'text' => 'High-stakes facts are quoted, never paraphrased.',
+        'state' => 'tested', 'note' => 'generator never invoked for fees or deadlines'],
+    ['id' => 'INV-3', 'text' => 'No individual outcome.',
+        'state' => 'tested', 'note' => '40 phrasings refused before retrieval'],
+    ['id' => 'INV-4', 'text' => 'Disclosure, before the first answer.',
+        'state' => 'specified', 'note' => 'no widget yet'],
+    ['id' => 'INV-5', 'text' => 'Closed retrieval scope.',
+        'state' => 'specified', 'note' => 'no prompt or retrieval yet'],
+    ['id' => 'INV-6', 'text' => 'Retrieved content is data, never instruction.',
+        'state' => 'specified', 'note' => 'no ingestion or prompt yet'],
+    ['id' => 'INV-7', 'text' => 'Everything is logged.',
+        'state' => 'partial', 'note' => 'schema in place, no logger'],
+    ['id' => 'INV-8', 'text' => 'Spend is capped.',
+        'state' => 'partial', 'note' => 'budget table in place, no guard'],
+    ['id' => 'INV-9', 'text' => 'It works on a bad connection.',
+        'state' => 'specified', 'note' => 'no widget yet'],
+    ['id' => 'INV-10', 'text' => 'No personal data in Phase 1.',
+        'state' => 'tested', 'note' => 'no account can reach a sibling database'],
+    ['id' => 'INV-11', 'text' => 'Stale content is visible.',
+        'state' => 'partial', 'note' => 'CHECK constraints; nothing renders it yet'],
+    ['id' => 'INV-12', 'text' => 'Nothing is deleted.',
+        'state' => 'tested', 'note' => 'no DELETE granted to any account'],
 ];
+
+$testedCount = count(array_filter($invariants, static fn (array $i): bool => $i['state'] === 'tested'));
 
 http_response_code(200);
 header('Content-Type: text/html; charset=utf-8');
@@ -295,7 +337,11 @@ th { color: var(--ink); font-weight: 600; }
 .state.ok { color: var(--green-deep); }
 .state.no { color: var(--muted); }
 ul.inv { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
-ul.inv li { background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius); padding: .55rem .75rem; font-size: .875rem; }
+ul.inv li { background: var(--surface-alt); border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius); padding: .55rem .75rem; font-size: .875rem; }
+ul.inv li.inv--tested { border-left-color: var(--green); }
+ul.inv li.inv--partial { border-left-color: var(--yellow); }
+ul.inv li.inv--specified { border-left-color: var(--border); }
+.inv-state { display: block; margin-top: .2rem; color: var(--muted); font-size: .78rem; }
 ul.inv code { color: var(--green-deep); font-weight: 700; font-size: .8rem; }
 .docs { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
 .docs li { border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem .9rem; }
@@ -367,10 +413,13 @@ a:focus-visible, .skip:focus-visible { outline: 3px solid var(--green); outline-
 <?php endif; ?>
 
     <h2>The twelve invariants</h2>
-    <p>Each requires a named test in <code>tests/Invariant/</code> before release. <strong>All twelve are currently specified and none is implemented</strong> &mdash; an invariant without a passing test is an invariant that does not exist, whatever the code appears to do.</p>
+    <p>Each requires a named test in <code>tests/Invariant/</code> before release. <strong><?= $testedCount ?> of 12 have one and it passes.</strong> The rest are marked honestly: <em>partial</em> means enforced somewhere real &mdash; a database constraint or a withheld privilege &mdash; but with no test file yet; <em>specified</em> means written down and nothing more. An invariant without a passing test is an invariant that does not exist, whatever the code appears to do.</p>
     <ul class="inv">
 <?php foreach ($invariants as $inv): ?>
-      <li><code><?= $esc($inv['id']) ?></code> <?= $esc($inv['text']) ?></li>
+      <li class="inv--<?= $esc($inv['state']) ?>">
+        <code><?= $esc($inv['id']) ?></code> <?= $esc($inv['text']) ?>
+        <span class="inv-state"><?= $esc($inv['state']) ?> &middot; <?= $esc($inv['note']) ?></span>
+      </li>
 <?php endforeach; ?>
     </ul>
 

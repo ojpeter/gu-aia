@@ -10,7 +10,7 @@
 | **Implemented** | Code exists and is believed correct. Not yet proven by a passing test. |
 | **Verified** | A test or a recorded manual check proves it, and the evidence is named below. |
 
-**As of 2026-08-31**, the schema and the database-access controls are built and verified; everything else is still `Specified`. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the check and can name it.
+**As of 2026-08-31**, the schema, the database-access controls, and the refusal/routing/citation core are built; **5 of the 12 invariants have a passing named test** (INV-1, INV-2, INV-3, INV-10, INV-12). The rest are `Implemented` at the schema layer or still `Specified`. Do not mark a row `Implemented` because the requirement is written; mark it when the code exists, and `Verified` only when you have run the check and can name it.
 
 Where a control is enforced at more than one layer, the row says so — several of the data-access controls below are now enforced in the **grant table**, not only in application code that does not yet exist.
 
@@ -39,14 +39,14 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 
 | Invariant | Control | Implementation | Test | Status |
 |---|---|---|---|---|
-| INV-1 | No answer without a source | *not built* | `tests/Invariant/NoAnswerWithoutSourceTest.php` | Specified |
-| INV-2 | High-stakes facts quoted, never paraphrased | *not built* | `tests/Invariant/QuotedNotParaphrasedTest.php` | Specified |
-| INV-3 | No individual outcome | *not built* | `tests/Invariant/NoIndividualOutcomeTest.php` | Specified |
+| INV-1 | No answer without a source | `CitationBinder` — discards, never repairs; zero citations or a citation outside the retrieved set both fail | `tests/Invariant/NoAnswerWithoutSourceTest.php` (8 cases) | **Verified** for the binder; retrieval threshold half still Specified |
+| INV-2 | High-stakes facts quoted, never paraphrased | `CategoryRouter` routes fees/entry-requirements/deadlines to `AnswerMode::Quoted`, which `callsGenerator()` refuses | `tests/Invariant/QuotedNotParaphrasedTest.php` — 20 questions, each asserting the generator was **never invoked** | **Verified** for routing; the quoted-answer renderer is still Specified |
+| INV-3 | No individual outcome | `RefusalIntents`, matched **before** retrieval so no context is ever fetched | `tests/Invariant/NoIndividualOutcomeTest.php` — the 40 phrasings Section 12 mandates, plus 15 negative cases guarding refusal *precision* | **Verified** |
 | INV-4 | AI disclosure, server-rendered | *not built* | `tests/Invariant/DisclosureTest.php` | Specified |
 | INV-5 | Closed retrieval scope | *not built* | `tests/Invariant/ClosedRetrievalScopeTest.php` | Specified |
 | INV-6 | Retrieved content is data, never instruction | *not built* | `tests/Invariant/ContextIsDataTest.php` + injection suite | Specified |
-| INV-7 | Everything is logged | *not built* | `tests/Invariant/InteractionLoggedTest.php` | Specified |
-| INV-8 | Spend is capped, degraded mode is real | *not built* | `tests/Invariant/BudgetCapTest.php` | Specified |
+| INV-7 | Everything is logged | Schema in place (`interactions`, `interaction_retrievals`, `interaction_citations`) with the full Section 13 field list | `tests/Invariant/InteractionLoggedTest.php` | **Implemented** (schema only) — no logger written |
+| INV-8 | Spend is capped, degraded mode is real | `budget_periods` in place; `AnswerMode::Degraded` cannot call the generator; `FakeGenerator::willTimeOut()` exists to exercise the fallback | `tests/Invariant/BudgetCapTest.php` | **Implemented** (schema + mode) — no budget guard written |
 | INV-9 | Works on a bad connection (60 KB, no-JS) | *not built* | `tests/Invariant/PayloadBudgetTest.php`, `NoJsFallbackTest.php` | Specified |
 | INV-10 | No personal data in Phase 1 | Absence of integration surface, plus: no account holds any privilege on `gu_hrms` or `gu_website` | `bin/verify_grants.php` (3 probes) + `tests/Invariant/NoPortalIntegrationTest.php` | **Verified** at the grant layer |
 | INV-11 | Stale content is visible; `reviewed_at` mandatory | `documents`/`chunks`: NOT NULL + `CHECK` constraints (0001, 0007) | `tests/Invariant/ReviewedAtMandatoryTest.php` | **Implemented** (schema layer) — bypass via non-strict `sql_mode` found and closed, see 0007; the answer-rendering half is still Specified |
@@ -60,11 +60,11 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 |---|---|---|---|
 | Prompt injection | Instruction-stripping at ingestion; context and user input delimited and labelled as data; ≥15 injection cases in the eval suite | `src/Ingestion/`, `src/Answering/`, `tests/Eval/` | Specified |
 | Insecure output handling | Model output escaped on render; no raw echo; link targets restricted to the retrieved set; never reaches shell/SQL/filesystem | `src/Answering/`, `templates/` | Specified |
-| Excessive agency | Generator has no tools, no function calling, no ability to act | `src/Answering/Generator` interface | Specified |
+| Excessive agency | Generator has no tools, no function calling, no ability to act | `src/Answering/Generator.php` — the interface takes two strings and returns text; it cannot fetch, write, or reach the database | **Implemented** |
 | Unbounded consumption | Rate limit per IP and per session; monthly budget ceiling, 80% alert, 100% degrade to retrieval-only | `src/Safety/`, `config/budget.php` | Specified |
 | Sensitive information disclosure | System prompt, retrieval scores, chunk IDs logged but never rendered | `src/Logging/`, `templates/` | Specified |
-| Supply chain | Dependencies reviewed and pinned; model provider isolated behind `Generator` | `composer.json`, `src/Answering/` | Specified |
-| Misinformation (ungrounded generation) | INV-1 + INV-2 + INV-5, measured by the eval harness | `tests/Eval/` | Specified |
+| Supply chain | Dependencies reviewed and pinned; model provider isolated behind `Generator` | `composer.json` + `composer.lock` (29 dev packages, no runtime dependencies); `src/Answering/Generator.php` | **Implemented** |
+| Misinformation (ungrounded generation) | INV-1 + INV-2 + INV-5, measured by the eval harness | `src/Answering/CitationBinder.php`, `CategoryRouter.php`, `tests/Eval/` | **Partly verified** — the binder and the quoted-mode routing are tested; the eval harness is not built |
 
 ---
 
@@ -119,4 +119,5 @@ Re-check the named standards for material revisions at each phase gate and recor
 | Date | Checked | Finding | By |
 |---|---|---|---|
 | 2026-08-31 | Register created at project foundation. No standards review performed yet. | — | Initial commit |
+| 2026-08-31 | Answering/safety core built; 156 tests, 375 assertions, all passing; PHPStan level 8 clean; PSR-12 clean. | The invariant tests found five real defects in code written the same hour: two interrogative phrasings ("are my points enough") escaped the INV-3 matcher; "can I see my admission letter" was routed to the Registry instead of the Portal; and "how much does the course cost" routed to Grounded, which would have sent a fees question through generation. Writing the tests from the specification's own mandated counts — 40 phrasings, 20 high-stakes questions — is what surfaced them. | Answering core |
 | 2026-08-31 | Data-access controls built and verified functionally (26 probes). | **Real finding:** `NOT NULL` on a DATE column is not sufficient on a MySQL-family server without `STRICT_TRANS_TABLES` — the server substitutes `0000-00-00` and accepts the row, which defeated INV-11. Closed with `CHECK` constraints (0007) plus a strict per-connection `sql_mode`. Development is MariaDB 10.4 while production targets MySQL 8; their default modes differ, so controls must not depend on server configuration. | Schema pass |

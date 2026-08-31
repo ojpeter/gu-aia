@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<ruleset name="GU-AIA">
+    <description>PSR-12, with two deliberate and documented deviations.</description>
+
+    <file>src</file>
+    <file>bin</file>
+    <file>tests</file>
+
+    <exclude-pattern>vendor/*</exclude-pattern>
+
+    <arg name="colors"/>
+    <arg value="p"/>
+
+    <!--
+        Warnings are reported but do not fail the run. The only warnings this
+        project produces are lines over PSR-12's 120-character soft limit, and
+        they are all regular expressions in src/Safety/RefusalIntents.php or SQL
+        literals in bin/verify_grants.php. Both are strings that cannot be
+        wrapped without making them harder to read and easier to get wrong, and
+        a refusal pattern that is hard to read is a safety problem. PSR-12 itself
+        states 120 as a soft limit, so treating it as a warning matches the
+        standard rather than bending it.
+    -->
+    <ini name="error_reporting" value="E_ALL &amp; ~E_DEPRECATED"/>
+    <arg name="report-width" value="120"/>
+
+    <rule ref="PSR12">
+        <!--
+            Excluded for bin/ only, below. A CLI entry point necessarily both
+            declares helpers and executes, because these scripts must run on a
+            fresh checkout with no autoloader — bin/migrate.php in particular has
+            to work before anything else in the project exists.
+        -->
+        <exclude name="PSR1.Files.SideEffects"/>
+    </rule>
+
+    <!--
+        Re-apply the side-effects rule everywhere it genuinely belongs: src/ is
+        library code and must never execute on include.
+    -->
+    <rule ref="PSR1.Files.SideEffects">
+        <include-pattern>src/*</include-pattern>
+    </rule>
+</ruleset>
