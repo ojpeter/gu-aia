@@ -30,7 +30,12 @@ return [
 
     // Programme and course codes are matched exactly and boosted — a user typing
     // a code knows what they want (Section 6).
-    'exact_match_boost' => 2.0,
+    // ADDITIVE, not a multiplier, and >= the maximum base score of 1.0 so an
+    // exact code match always outranks a non-code match. A multiplier was tried
+    // first and was wrong: it cannot lift a near-zero base, so the chunk that
+    // exactly matched the typed code could still lose to prose that merely
+    // mentioned the programme.
+    'exact_match_boost' => 1.0,
     'code_pattern' => '/\b[A-Z]{2,4}\s?\d{3,4}\b/',
 
     // Abbreviation expansion is configuration, seeded with the University's own

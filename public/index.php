@@ -237,7 +237,7 @@ $invariants = [
     ['id' => 'INV-5', 'text' => 'Closed retrieval scope.',
         'state' => 'specified', 'note' => 'no prompt or retrieval yet'],
     ['id' => 'INV-6', 'text' => 'Retrieved content is data, never instruction.',
-        'state' => 'specified', 'note' => 'no ingestion or prompt yet'],
+        'state' => 'partial', 'note' => 'ingestion cleaning and query steering tested; prompt half not built'],
     ['id' => 'INV-7', 'text' => 'Everything is logged.',
         'state' => 'partial', 'note' => 'schema in place, no logger'],
     ['id' => 'INV-8', 'text' => 'Spend is capped.',
