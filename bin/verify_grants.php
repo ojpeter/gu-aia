@@ -57,6 +57,7 @@ $accounts = [
     'app'     => [$env['DB_APP_USER'] ?? '', $env['DB_APP_PASS'] ?? ''],
     'ingest'  => [$env['DB_INGEST_USER'] ?? '', $env['DB_INGEST_PASS'] ?? ''],
     'migrate' => [$env['DB_MIGRATION_USER'] ?? '', $env['DB_MIGRATION_PASS'] ?? ''],
+    'console' => [$env['DB_CONSOLE_USER'] ?? '', $env['DB_CONSOLE_PASS'] ?? ''],
 ];
 
 $options = require $root . '/config/pdo_options.php';
@@ -144,6 +145,31 @@ $probes = [
         "UPDATE unanswered_questions SET normalised_question = '' WHERE id = 0"],
     ['app', 'allow', 'INV-12: app may redact a feedback comment',
         'UPDATE feedback SET comment = NULL WHERE id = 0'],
+
+    // --- The console may author curated entries; the app still may not ---
+    //
+    // This pair is the whole justification for a fourth account. Section 14 says
+    // the console authors curated entries, which are corpus content; the app
+    // must never be able to write corpus content from a request path. Both hold.
+    // A no-op UPDATE rather than an INSERT: privilege is checked before the row
+    // is built, so this tests the grant without tripping a NOT NULL constraint
+    // and reporting a schema error as though it were a permission result.
+    ['console', 'allow', 'console may write curated entries',
+        'UPDATE curated_entries SET answer = answer WHERE id = 0'],
+    ['app', 'deny', 'app CANNOT write curated entries (corpus stays read-only to requests)',
+        "UPDATE curated_entries SET answer = 'tampered' WHERE id = 0"],
+    ['console', 'allow', 'console may write the chunks backing a curated entry',
+        'UPDATE chunks SET body = body WHERE id = 0'],
+    ['console', 'allow', 'console may read the unanswered-question report',
+        'SELECT id FROM unanswered_questions LIMIT 1'],
+    ['console', 'deny', 'console CANNOT edit the interaction log',
+        "UPDATE interactions SET answer = 'tampered' WHERE id = 0"],
+    ['console', 'deny', 'console CANNOT change an admin role',
+        "UPDATE admin_users SET role = 'authoriser' WHERE id = 0"],
+    ['console', 'deny', 'INV-12: console CANNOT delete a curated entry',
+        'DELETE FROM curated_entries WHERE id = 0'],
+    ['console', 'deny', 'INV-10: console CANNOT read gu_hrms',
+        'SELECT 1 FROM gu_hrms.employees LIMIT 1'],
 
     // --- The app can do the logging it must do (INV-7) ---
     ['app', 'allow', 'INV-7: app reads the interaction log',

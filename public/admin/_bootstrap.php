@@ -86,8 +86,11 @@ try {
             $env['DB_NAME'] ?? 'gu_aia',
             $env['DB_CHARSET'] ?? 'utf8mb4'
         ),
-        $env['DB_APP_USER'] ?? '',
-        $env['DB_APP_PASS'] ?? '',
+        // The CONSOLE account, not the app account. The public request path
+        // still cannot write the corpus; this one can author curated entries.
+        // See db/accounts.sql section 4 for why that separation is kept.
+        $env['DB_CONSOLE_USER'] ?? '',
+        $env['DB_CONSOLE_PASS'] ?? '',
         $options
     );
     $hasher = new IdentifierHasher($env['LOG_HASH_KEY'] ?? '');

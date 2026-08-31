@@ -106,10 +106,71 @@ GRANT SELECT ON gu_aia.eval_questions TO 'gu_aia_app'@'localhost';
 GRANT SELECT ON gu_aia.eval_runs      TO 'gu_aia_app'@'localhost';
 GRANT SELECT ON gu_aia.eval_results   TO 'gu_aia_app'@'localhost';
 
+
+-- ===========================================================================
+-- 4. Console account - the authenticated admin console.
+--
+--    WHY THIS EXISTS RATHER THAN WIDENING gu_aia_app.
+--
+--    Section 14 says the console authors curated question-and-answer entries,
+--    and those ARE corpus content. But gu_aia_app is deliberately unable to
+--    write the corpus: a request-handling path that could rewrite a fees chunk
+--    is a defacement risk, and that grant is verified as absent.
+--
+--    Those two facts are not in conflict once the distinction is named. The risk
+--    being guarded against is an UNAUTHENTICATED request path writing published
+--    content. An authenticated, permission-checked, audited console action is a
+--    different thing, and giving it its own account keeps the public path's
+--    inability to write the corpus intact and provable.
+--
+--    Scoped tightly even so. It may WRITE only curated entries and the documents
+--    and chunks that back them. It may READ the interaction log, unanswered
+--    questions and feedback, because Section 14 requires the console to show
+--    those reports -- but read-only, so a console session cannot edit or redact
+--    what the assistant told somebody. It cannot change a role or a password
+--    hash. It has no DELETE anywhere.
+-- ===========================================================================
+CREATE USER IF NOT EXISTS 'gu_aia_console'@'localhost' IDENTIFIED BY '__PASSWORD__';
+
+-- Reads what the console displays.
+GRANT SELECT ON gu_aia.offices             TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.categories          TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.admin_users         TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.eval_runs           TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.eval_results        TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.eval_questions      TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.ingest_runs         TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.schema_migrations   TO 'gu_aia_console'@'localhost';
+
+-- The reports. Read-only: the console shows the unanswered-question report and
+-- the feedback stream, and must not be able to edit either.
+GRANT SELECT ON gu_aia.interactions          TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.unanswered_questions  TO 'gu_aia_console'@'localhost';
+GRANT SELECT ON gu_aia.feedback              TO 'gu_aia_console'@'localhost';
+
+-- Authoring curated entries, and the document and chunk rows that carry them.
+-- No DELETE: an edit supersedes, so a past answer stays reconstructible (INV-12).
+GRANT SELECT, INSERT, UPDATE ON gu_aia.curated_entries  TO 'gu_aia_console'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON gu_aia.documents        TO 'gu_aia_console'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON gu_aia.chunks           TO 'gu_aia_console'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON gu_aia.chunk_codes      TO 'gu_aia_console'@'localhost';
+GRANT SELECT, UPDATE         ON gu_aia.source_conflicts TO 'gu_aia_console'@'localhost';
+
+-- Records a login and a lockout; cannot change a role or a password hash.
+GRANT UPDATE (last_login_at, failed_logins, locked_until)
+  ON gu_aia.admin_users TO 'gu_aia_console'@'localhost';
+
+-- Append-only, like every other writer of this table.
+GRANT SELECT, INSERT ON gu_aia.admin_audit_log TO 'gu_aia_console'@'localhost';
+
 -- NOTE deliberately not granted, and why:
 --   * No account has DELETE or DROP on any table            (INV-12)
 --   * gu_aia_app has no INSERT/UPDATE on documents or chunks (corpus integrity)
 --   * gu_aia_ingest has no access to interactions or feedback (purpose limitation)
+--   * gu_aia_console cannot read interactions' full text beyond SELECT for the
+--     reports, cannot change a role or password hash, and cannot delete anything
+--   * gu_aia_app STILL cannot write the corpus - that separation is the point
+--     of adding a fourth account rather than widening the third
 --   * No account has any privilege on any other schema — in particular not on
 --     gu_hrms or gu_website, the sibling projects' databases. Phase 1 has no
 --     cross-system integration surface at all (INV-10), and the grant table is
