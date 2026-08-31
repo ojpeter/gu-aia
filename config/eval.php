@@ -87,6 +87,19 @@ return [
     /**
      * Stages that exist and are tested. Everything else is pending.
      */
+    // Only 'router' — deliberately, even though ingestion cleaning, the prompt
+    // and the citation binder now all exist as code with passing invariant
+    // tests. The harness still evaluates the ROUTING layer only; it does not run
+    // questions through AnsweringPipeline.
+    //
+    // Wiring it through the pipeline today would be worse than leaving it. The
+    // corpus is empty (Phase 0 gates indexing), so every question would refuse —
+    // which would turn the out-of-corpus and injection suites GREEN for entirely
+    // the wrong reason, while the precision cases went red. A suite that passes
+    // because the system can answer nothing at all is exactly the false green
+    // this harness exists to prevent.
+    //
+    // Add stages here when the pipeline runs end to end against real content.
     'stages_built' => ['router'],
 
     /**

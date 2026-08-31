@@ -37,7 +37,7 @@ use GuAia\Ingestion\Embedder;
  * the system answer from its single best candidate no matter how poor, which is
  * precisely the "confidently wrong" failure Section 0 is written against.
  */
-final class Retriever
+final class Retriever implements ContextRetriever
 {
     public function __construct(
         private readonly CandidateGenerator $candidates,
