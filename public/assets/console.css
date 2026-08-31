@@ -1,0 +1,51 @@
+/* GU-AIA console. Staff-facing, so not under the widget's 60 KB budget, but
+   kept plain on purpose: this is a working screen for Communications and the
+   Registry, not a product surface. */
+:root{--green:#00bf63;--deep:#027a41;--ink:#10201a;--body:#40514a;--muted:#6b7b74;
+  --line:#e2eae6;--surface:#fff;--alt:#f4f8f6;--warn:#8a6d00;--warn-bg:#fff9d6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--alt);color:var(--body);
+  font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--deep)}
+h1,h2,h3{color:var(--ink);line-height:1.25}
+h1{font-size:1.4rem;margin:0 0 .3rem}
+h2{font-size:1.1rem;margin:0 0 .4rem}
+h3{font-size:.95rem;margin:1.4rem 0 .3rem}
+code{background:var(--alt);padding:.1rem .3rem;border-radius:4px;font-size:.85em}
+
+.bar{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+  background:var(--ink);color:#fff;padding:.7rem 1.25rem}
+.bar span{color:#c2cfc9;font-size:.85rem}
+.bar form{margin-left:auto}
+.bar button{background:transparent;border:1px solid #4a5b54;color:#fff;
+  border-radius:6px;padding:.35rem .8rem;font:inherit;font-size:.85rem;cursor:pointer}
+
+main{max-width:70rem;margin:0 auto;padding:1.25rem}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:1.1rem;margin:0 0 1.1rem}
+.lede{color:var(--muted);font-size:.875rem;margin:.2rem 0 .9rem}
+.empty{background:var(--alt);border-left:4px solid var(--green);border-radius:0 8px 8px 0;
+  padding:.8rem .9rem;margin:.4rem 0;font-size:.9rem}
+.error{background:var(--warn-bg);border-left:4px solid #f0c000;border-radius:0 8px 8px 0;
+  padding:.7rem .9rem;color:var(--warn);margin:0 0 1rem}
+.hint{color:var(--muted);font-size:.8rem;margin:.2rem 0 1rem}
+
+table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.4rem 0 0}
+th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink);font-weight:600}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.overdue td{background:var(--warn-bg)}
+
+ul.tally{list-style:none;margin:.4rem 0 0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+ul.tally li{background:var(--alt);border:1px solid var(--line);border-radius:999px;
+  padding:.3rem .8rem;font-size:.85rem}
+ul.tally span{color:var(--ink);font-weight:700;margin-left:.3rem}
+
+.console-login main{max-width:24rem;margin:4rem auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:10px;padding:1.5rem}
+form label{display:block;font-weight:600;color:var(--ink);font-size:.85rem;margin:.8rem 0 .25rem}
+form input{width:100%;padding:.55rem .7rem;font:inherit;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface);color:var(--ink)}
+form button{margin-top:1rem;padding:.6rem 1.2rem;font:inherit;font-weight:600;cursor:pointer;
+  border:0;border-radius:8px;background:var(--deep);color:#fff}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}

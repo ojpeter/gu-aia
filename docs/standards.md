@@ -78,11 +78,11 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 | Upload: extension whitelist, size cap, `finfo` MIME re-validation; reject scanned PDFs with no text layer | `src/Ingestion/` | Specified |
 | Output encoding via one shared escaping helper | `templates/` | Specified |
 | CSRF token on every state-changing form, incl. feedback and the no-JS post | `public/`, `src/Safety/` | Specified |
-| Admin auth: `password_hash()`, session regeneration, secure/httponly/samesite cookies, inactivity timeout, 2FA for authoritative-flag roles | `src/Admin/` | Specified |
-| Per-action server-side authorisation | `src/Admin/` | Specified |
+| Admin auth: `password_hash()`, session regeneration, secure/httponly/samesite cookies, inactivity timeout, 2FA for authoritative-flag roles | `Admin\Authenticator` (bcrypt cost 12, temporary lockout, identical response for every failure kind, hash computed even for unknown accounts so timing does not enumerate); `public/admin/_bootstrap.php` (SameSite=**Strict**, separate cookie name, 30-minute idle, regeneration on sign-in); `Admin\Totp` (RFC 6238, constant-time, one step of drift) | **Verified** — `AdminSecurityTest` (13) + `Integration\AuthenticationTest` (11), including an RFC 4226 known-answer test so the TOTP interoperates with real authenticator apps rather than being self-consistently wrong |
+| Per-action server-side authorisation | `Admin\Role` + `AuthenticatedUser::may()` + `ConsoleContext::requirePermission()`, checked at each action rather than once at login; denials are audited | **Verified** — including that having the authoriser role and having passed 2FA *this session* are two separate facts, since conflating them turns a 2FA requirement into a label |
 | Security headers, tested in the embedded case inside `gu-website` | `public/` | Specified |
 | Error handling: no stack trace, DB error, path, or prompt to a visitor | global handler | Specified |
-| Append-only admin audit log | `admin_audit_log` (0004); append-only enforced by grant — the app holds `SELECT`+`INSERT` and neither `UPDATE` nor `DELETE`, so a compromised console session cannot rewrite history | **Verified** at the grant layer (2 probes); the writing code in `src/Logging/` is still Specified |
+| Append-only admin audit log | `Logging\AuditLog` writing to `admin_audit_log`; append-only enforced by grant — the app holds `SELECT`+`INSERT` and neither `UPDATE` nor `DELETE`, so the class has no update method because the server would refuse one | **Verified** — grant probes plus `AuthenticationTest`. A failed sign-in is recorded **without** a user id even when the email matched: attributing it would put “somebody tried to sign in as this named member of staff” into a table other staff read, on the strength of an attempt anyone can make with a guessed email |
 
 ---
 
@@ -170,6 +170,25 @@ Each requires a named test in `tests/Invariant/`. An invariant without a passing
 
 ---
 
+## 12. Admin console (`requirements.md` Section 14)
+
+| Section 14 requirement | Status |
+|---|---|
+| Corpus browser: what is indexed, from where, when reviewed, by whom owned | **Built** — overdue documents sorted first and highlighted |
+| Conflicts detected between sources | **Built** (count); the resolution screen is not |
+| Unanswered-question report and feedback stream | **Built**, and placed **first on the page** deliberately — Section 13 calls the report a primary deliverable, so putting the corpus browser first would make this a content-management screen with a report attached, which is the wrong way round |
+| View the last evaluation run | **Built** |
+| Trigger a re-index | **Not built** — listed on the page as not built, rather than shown as a disabled button that implies it nearly works |
+| Author and edit curated Q&A entries | **Not built** — same |
+| Mark a document authoritative for a category | **Not built** — same. The permission, the 2FA gate and the audit action all exist and are tested; only the screen is missing |
+| "No content editing capability beyond curated entries" | **Verified** — there is no `edit_corpus` permission to grant, and a test asserts no role has one. Section 14: "the console must never become a second place where facts live" |
+
+Account creation is `bin/create_admin.php`, run at a terminal under the migration account. The web-serving account cannot create a console user or change a role — it holds column-level `UPDATE` on `last_login_at`, `failed_logins` and `locked_until` and nothing else — so privilege escalation is not reachable from a request.
+
+**Known gap, recorded rather than hidden:** `admin_users.totp_secret_enc` is named for encryption at rest and holds the secret in plaintext. Anyone who can read that column can mint valid second factors, which reduces 2FA to a single factor against a database-read attacker. `bin/create_admin.php` says so on screen when it issues a secret.
+
+---
+
 ## 7. Maintenance record
 
 Re-check the named standards for material revisions at each phase gate and record the check here — **including a finding of "no change."**
@@ -177,6 +196,7 @@ Re-check the named standards for material revisions at each phase gate and recor
 | Date | Checked | Finding | By |
 |---|---|---|---|
 | 2026-08-31 | Register created at project foundation. No standards review performed yet. | — | Initial commit |
+| 2026-08-31 | Admin console security core and read-only dashboard built; 303 tests, 818 assertions. | Console authorisation is per action, and the ladder is steep at the top: only `mark_authoritative` requires 2FA, because it decides which source wins a conflict and therefore which fees figure the public is shown. PHPStan objected that the console bootstrap leaked variables into the including scope; refactored to return a `ConsoleContext` rather than annotating around it, since a page depending on what a `require` happens to leave behind breaks silently at runtime instead of loudly at analysis time. | Admin console |
 | 2026-08-31 | Prompt contract and answering pipeline built; 236 tests, 599 assertions. **8 of 12 invariants now have passing named tests.** | The pipeline is where the invariants hold or fail, because it is the only place that decides what a visitor receives; the ORDER of its five steps is the safety property. Two judgement calls recorded: (1) a refusal with no configured contact is served and flagged rather than throwing — an error page gives the user nothing, which is worse; this softens the "fail loudly" note in config/refusals.php and says why. (2) `stages_built` in config/eval.php stays at `['router']` even though ingestion, prompt and binder now exist, because running the harness through the pipeline against an EMPTY corpus would turn the out-of-corpus and injection suites green for entirely the wrong reason. | Answering pipeline |
 | 2026-08-31 | Ingestion and retrieval layers built; 200 tests, 529 assertions. | **Two design defects found by their own tests.** (1) The exact-code boost was multiplicative, which cannot lift a near-zero base — a chunk exactly matching a typed course code could still lose to prose merely mentioning the programme, defeating Section 6. Now additive and at least the maximum base score, making exact matches a strict tier. (2) The instruction-shape pattern for "from now on" required a following pronoun and missed the commonest phrasing. Also recorded: instruction-shaped prose is FLAGGED, never deleted — silently editing a University page would change what the University said, and this system exists to report it faithfully. | Ingestion + retrieval |
 | 2026-08-31 | Evaluation harness built and running in CI order (`composer ci`). 118 golden questions seeded; 83 evaluated and passing, 35 correctly reported PENDING. | **Correction to my own first design:** the harness initially reported the out-of-corpus and injection suites as 34 FAILURES. The expectations are right — both must end in refusal — but that refusal comes from retrieval and the citation binder, neither of which is built, so the router's Grounded routing was correct. Reporting them as failures makes an unbuilt system look broken and trains readers to ignore red, which is the same dishonesty as a false green pointed the other way. Suites now declare which pipeline stages they depend on (`suite_requires`) and report PENDING until those stages exist. | Eval harness |
