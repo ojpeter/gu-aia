@@ -33,7 +33,16 @@
         "test:invariant": "phpunit --testsuite invariant",
         "eval": "php bin/evaluate.php",
         "analyse": "phpstan analyse",
-        "lint": "phpcs --standard=PSR12 src bin tests",
-        "check:no-delete": "! grep -rniE '\\b(DELETE[[:space:]]+FROM|->delete\\()' src bin public"
+        "lint": "phpcs",
+        "check:no-delete": "! grep -rniE '\\b(DELETE[[:space:]]+FROM|->delete\\()' src bin public",
+        "eval:seed": "php bin/seed_eval_questions.php",
+        "grants:verify": "php bin/verify_grants.php",
+        "migrate": "php bin/migrate.php",
+        "ci": [
+            "@analyse",
+            "@lint",
+            "@test",
+            "@eval"
+        ]
     }
 }

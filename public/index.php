@@ -174,6 +174,41 @@ if ($isDev) {
         }
     }
 
+    // Last evaluation run (requirements.md Section 12, Section 14). Reported with
+    // how many questions could ACTUALLY be evaluated, because a green run over a
+    // third of the set is not a green system.
+    if ($pdo instanceof PDO) {
+        try {
+            $stmt = $pdo->query(
+                'SELECT started_at, questions_total, questions_passed, passed
+                   FROM eval_runs ORDER BY id DESC LIMIT 1'
+            );
+            $run = $stmt === false ? false : $stmt->fetch();
+            if (is_array($run)) {
+                $checks[] = [
+                    'label' => 'Last evaluation',
+                    // Never OK while the set is short of Section 12's 200 and
+                    // whole suites are pending unbuilt stages.
+                    'ok' => false,
+                    'detail' => sprintf(
+                        '%s: %d of %d questions evaluated and passed; the rest pending stages not yet built',
+                        (string) $run['started_at'],
+                        (int) $run['questions_passed'],
+                        (int) $run['questions_total']
+                    ),
+                ];
+            } else {
+                $checks[] = [
+                    'label' => 'Last evaluation',
+                    'ok' => false,
+                    'detail' => 'never run - php bin/evaluate.php',
+                ];
+            }
+        } catch (PDOException) {
+            // The database row above already reports connection state.
+        }
+    }
+
     $checks[] = [
         'label' => 'Generator',
         'ok' => ($env['GENERATOR_DRIVER'] ?? 'fake') === 'fake',

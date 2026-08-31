@@ -28,36 +28,18 @@ use PHPUnit\Framework\TestCase;
 #[Group('invariant')]
 final class QuotedNotParaphrasedTest extends TestCase
 {
-    /** @return iterable<string, array{string}> */
+    /**
+     * Shared with the evaluation harness — one source of truth, so a question
+     * fixed in one place cannot stay broken in the other.
+     *
+     * @return iterable<string, array{string}>
+     */
     public static function highStakesQuestions(): iterable
     {
-        $questions = [
-            // Fees
-            'What are the fees for Bachelor of Science in Computer Science?',
-            'How much is tuition for the Bachelor of Laws?',
-            'What is the fees structure for postgraduate students?',
-            'How much does the course cost?',
-            'What are the functional fees this year?',
-            'What do I pay per semester?',
-            'What are the fees for private sponsorship?',
-            // Entry requirements
-            'What are the entry requirements for Medicine?',
-            'What are the admission requirements for Education?',
-            'What is the cut-off for the Bachelor of Nursing?',
-            'What are the minimum points for Agriculture?',
-            'What subject combination is required for Computer Science?',
-            'What is the weighting for Law?',
-            // Deadlines
-            'When is the application deadline?',
-            'What is the closing date for applications?',
-            'When does the semester begin?',
-            'What is the academic calendar?',
-            'When do applications open?',
-            'What is the reporting date for first years?',
-            'When do applications close for mature age entry?',
-        ];
+        /** @var array<string, array{questions: list<string>}> $set */
+        $set = require dirname(__DIR__, 2) . '/config/eval/golden_set.php';
 
-        foreach ($questions as $question) {
+        foreach ($set['quoted_high_stakes']['questions'] as $question) {
             yield $question => [$question];
         }
     }
