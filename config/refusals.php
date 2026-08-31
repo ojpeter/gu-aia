@@ -33,8 +33,22 @@ return [
             'telephone' => null,
             'url' => null,
         ],
+        // NOT an office name until somebody confirms it.
+        //
+        // This entry used to read 'Finance Department', and the widget duly told
+        // a visitor asking about fees to "contact Finance Department" — an
+        // office requirements.md never names and which may not exist under that
+        // title. It was caught by looking at the rendered page, not by any test,
+        // because it is not a code defect: it is a fabricated fact, rendered
+        // confidently, of exactly the kind this whole project exists to prevent.
+        // The same reasoning already kept it out of the seeded `offices` table
+        // (see 0006_seed_reference_data.sql); it should never have survived here.
+        //
+        // Left null so the renderer falls back to a generic phrase and sets
+        // handoffMissing, which is visible in the log and the weekly report.
+        // Phase 0 supplies the real owner of fees content.
         'finance' => [
-            'office' => 'Finance Department',
+            'office' => null,
             'email' => null,
             'telephone' => null,
             'url' => null,
@@ -61,9 +75,13 @@ return [
 
     // PLACEHOLDER COPY — to be replaced by Communications.
     'templates' => [
+        // {office} falls back to a generic phrase when no contact is confirmed.
+        // The sentence is written so that fallback still reads as a complete,
+        // honest sentence rather than an obvious gap — but it is a placeholder
+        // either way, and Communications authors the real copy (Section 9).
         'no_confident_context' =>
             'I could not find this in Gulu University\'s published information, '
-            . 'so I will not guess. Please contact {office}.',
+            . 'so I will not guess. {office} can help.',
 
         'individual_outcome' =>
             'I cannot say whether any individual will be admitted or will qualify. '

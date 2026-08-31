@@ -45,7 +45,11 @@ final class RefusalRenderer
         $contact = $handoffKey === null ? null : ($this->config['contacts'][$handoffKey] ?? null);
         $office = $contact['office'] ?? null;
 
-        $text = str_replace('{office}', $office ?? 'the relevant University office', $template);
+        // The fallback names no office, because naming one that has not been
+        // confirmed is how "contact Finance Department" reached a rendered page
+        // for an office requirements.md never mentions. A vaguer sentence that
+        // is true beats a specific one that may not be.
+        $text = str_replace('{office}', $office ?? 'The University', $template);
 
         $missing = $contact === null
             || ($contact['email'] ?? null) === null && ($contact['telephone'] ?? null) === null
