@@ -144,6 +144,13 @@ header('Content-Type: text/html; charset=utf-8');
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>GU-AIA — Gulu University AI Assistant</title>
+<?php /* Paths are relative, with no leading slash, so they resolve whether the
+         project is served from a domain root or nested under /gu-aia/ as it is
+         under XAMPP. assets/ lives inside public/ because public/ is the document
+         root; the .htaccess rewrite means the URL is the same either way. */ ?>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/images/logo-32.png">
+<link rel="icon" type="image/png" sizes="128x128" href="assets/images/logo-128.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/images/logo-180.png">
 <style>
 :root {
   --green: #00bf63;
@@ -199,6 +206,24 @@ h1 { font-size: clamp(1.5rem, 4vw, 2.1rem); margin: 0 0 .4rem; line-height: 1.25
 h2 { font-size: 1.15rem; color: var(--ink); margin: 2.25rem 0 .75rem; }
 h3 { font-size: .95rem; color: var(--ink); margin: 1.25rem 0 .5rem; }
 .tagline { margin: 0; font-size: 1rem; }
+.lockup { display: flex; align-items: center; gap: 1.1rem; }
+.lockup img {
+  width: 84px; height: auto; flex: 0 0 auto;
+  /* The crest PNG has a transparent background, and its outline, the "GULU
+     UNIVERSITY" band and the "FOR COMMUNITY TRANSFORMATION" scroll are all dark
+     green — against this dark green masthead they disappear (confirmed in the
+     browser; a drop-shadow halo was not enough). The mark is designed to sit on
+     a light ground, so it gets one, rather than being recoloured or outlined. */
+  background: #fff;
+  padding: .5rem;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .25);
+}
+.lockup > div { min-width: 0; }
+@media (max-width: 34rem) {
+  .lockup { flex-direction: column; align-items: flex-start; gap: .75rem; }
+  .lockup img { width: 64px; }
+}
 /* Specificity must beat `header.masthead p` above (0,1,2), which would otherwise
    win on source order and paint this white — white on #fff24d is ~1.1:1 and
    fails WCAG outright. The yellow accent pairs with dark text ONLY. */
@@ -246,8 +271,21 @@ a:focus-visible, .skip:focus-visible { outline: 3px solid var(--green); outline-
 <header class="masthead">
   <div class="wrap">
     <p class="badge">Foundations only — nothing runs yet</p>
-    <h1>GU-AIA — Gulu University AI Assistant</h1>
-    <p class="tagline">A retrieval assistant for gu.ac.ug. Directorate of ICT Services.</p>
+    <div class="lockup">
+      <?php /* alt="" deliberately: the crest carries the wordmark "Gulu University"
+               and the motto, both of which the adjacent <h1> and tagline already
+               state in text. Giving it descriptive alt text would make a screen
+               reader announce the institution twice. Decorative here, not
+               uninformative. */ ?>
+      <img src="assets/images/logo-180.png"
+           srcset="assets/images/logo-128.png 128w, assets/images/logo-180.png 180w"
+           sizes="(max-width: 34rem) 64px, 84px"
+           width="180" height="180" alt="" decoding="async">
+      <div>
+        <h1>GU-AIA — Gulu University AI Assistant</h1>
+        <p class="tagline">A retrieval assistant for gu.ac.ug. Directorate of ICT Services.</p>
+      </div>
+    </div>
   </div>
 </header>
 
